@@ -26,7 +26,8 @@ No actionable P0, P1, or P2 visual findings remain in the checked states.
 - The same test opens the real right-click edit menu, finds Cut, Copy, Paste, and Select All, invokes Paste, and verifies the textbox value.
 - `scripts\Test-ExplorerCommand.ps1` invokes the packaged `IExplorerCommand` with two files and one folder and verifies the selection summary received by the installed app.
 - `scripts\Test-FinalPreviewFlow.ps1` drives the installed final-preview window, confirms the action, verifies two files and one folder were renamed, and verifies that undo history was persisted.
-- Core tests cover local preset save/overwrite/delete, all four sort strategies, reverse ordering, preview planning, collisions, execution, persistence, and undo.
+- Core tests cover local preset save/overwrite/delete, all four sort strategies, reverse ordering, preview planning, collisions, locked-item rollback, long-name rejection, locked-history recovery, execution, persistence, and undo.
+- An independent deep-user pass rechecked the Windows 11 first-level menu for file-only, folder-only, and mixed selections; it also built a 1,000-item preview in 1.33 seconds and confirmed the UI remained ready.
 
 ## Comparison History
 
@@ -42,6 +43,7 @@ No actionable P0, P1, or P2 visual findings remain in the checked states.
 - Dark mode is not offered in version 1.1, so no dark-theme claim is made.
 - Windows text scaling above the current system setting was not separately captured; the rule rail scrolls and the window enforces minimum dimensions.
 - Screenshot review cannot establish full screen-reader compatibility; UI Automation names and keyboard paths were checked, but Narrator was not run end to end.
+- Non-NTFS/network shares, a standard non-administrator account, touch input, and Windows high-contrast mode were not separately tested on real target systems.
 
 ## Implementation Checklist
 
@@ -49,7 +51,7 @@ No actionable P0, P1, or P2 visual findings remain in the checked states.
 - [x] Default, populated-valid, minimum-size, final-preview, and interaction states checked.
 - [x] Fonts, spacing, colors, icons, copy, focusability, truncation, and action hierarchy reviewed.
 - [x] Build completed with zero warnings and zero errors.
-- [x] Unit/integration tests passed 8/8.
+- [x] Unit/integration tests passed 12/12.
 - [x] Installed package, Explorer selection transfer, mouse-wheel behavior, right-click paste, and final confirmation flow verified.
 
 final result: passed

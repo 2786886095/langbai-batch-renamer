@@ -24,7 +24,7 @@ public sealed class HistoryStore
             if (!File.Exists(FilePath)) return [];
             return JsonSerializer.Deserialize<List<RenameHistoryEntry>>(File.ReadAllText(FilePath), JsonOptions) ?? [];
         }
-        catch (JsonException)
+        catch (Exception ex) when (ex is JsonException or IOException or UnauthorizedAccessException)
         {
             return [];
         }

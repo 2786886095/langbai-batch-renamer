@@ -169,6 +169,7 @@ public static partial class RenamePlanner
     internal static string? ValidateName(string name)
     {
         if (string.IsNullOrWhiteSpace(name)) return "新名称不能为空。";
+        if (name.Length > 255) return "Windows 单个文件或文件夹名称不能超过 255 个字符。";
         if (name is "." or "..") return "新名称不能是 . 或 ..。";
         if (name.EndsWith(' ') || name.EndsWith('.')) return "Windows 名称不能以空格或句点结尾。";
         if (name.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0) return "新名称包含 Windows 不允许的字符。";

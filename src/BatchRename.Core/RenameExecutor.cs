@@ -2,6 +2,30 @@ namespace BatchRename.Core;
 
 public static class RenameExecutor
 {
+    public static RenameHistoryEntry ExecuteAndRecord(IReadOnlyList<RenamePlanItem> items, HistoryStore historyStore)
+    {
+        ArgumentNullException.ThrowIfNull(historyStore);
+        var history = Execute(items);
+        try
+        {
+            historyStore.Add(history);
+            return history;
+        }
+        catch (Exception saveError) when (saveError is IOException or UnauthorizedAccessException)
+        {
+            try
+            {
+                Undo(history);
+            }
+            catch (Exception rollbackError) when (rollbackError is IOException or UnauthorizedAccessException or RenameValidationException)
+            {
+                throw new IOException("重命名已完成，但回退记录保存失败，且无法自动恢复原名称。请立即检查文件状态。",
+                    new AggregateException(saveError, rollbackError));
+            }
+            throw new IOException("无法保存回退记录，已自动恢复原名称。", saveError);
+        }
+    }
+
     public static RenameHistoryEntry Execute(IReadOnlyList<RenamePlanItem> items)
     {
         if (!RenameValidator.Validate(items))

@@ -199,8 +199,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         try
         {
             var targetPaths = items.Select(item => item.TargetPath).ToList();
-            var history = RenameExecutor.Execute(items);
-            _historyStore.Add(history);
+            var history = RenameExecutor.ExecuteAndRecord(items, _historyStore);
             _paths.Clear();
             _paths.AddRange(targetPaths);
             RegeneratePreview();
@@ -208,7 +207,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or RenameValidationException)
         {
-            MessageBox.Show(this, $"未能完成重命名，已尽可能恢复原名称。\n\n{ex.Message}", "批量重命名失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            MessageBox.Show(this, $"执行过程中发生错误，请根据下方说明检查文件状态。\n\n{ex.Message}", "批量重命名失败", MessageBoxButton.OK, MessageBoxImage.Error);
             RegeneratePreview();
         }
     }

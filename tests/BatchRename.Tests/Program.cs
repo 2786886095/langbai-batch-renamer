@@ -9,6 +9,10 @@ var tests = new (string Name, Action Run)[]
     ("文件与文件夹执行后可回退", TestExecuteAndUndo),
     ("重复目标冲突", TestDuplicateCollision),
     ("外部目标占用冲突", TestExistingTargetCollision),
+    ("项目被占用时事务回滚", TestLockedItemRollback),
+    ("历史保存失败时恢复原名称", TestHistorySaveFailureRollback),
+    ("超长名称在预览阶段被阻止", TestLongNameValidation),
+    ("历史文件被占用时安全降级", TestLockedHistoryRead),
     ("历史记录跨进程持久化", TestHistoryPersistence)
 };
 
@@ -144,6 +148,62 @@ static void TestExistingTargetCollision()
     fixture.File("occupied.txt");
     var items = RenamePlanner.Build([source], new RenameOptions { Template = "occupied{S}" });
     True(items[0].Error.Contains("占用"));
+}
+
+static void TestLongNameValidation()
+{
+    using var fixture = new TempFixture();
+    var source = fixture.File("source.txt");
+    var items = RenamePlanner.Build([source], new RenameOptions { Template = new string('x', 256) });
+    True(items[0].Error.Contains("255"));
+}
+
+static void TestLockedItemRollback()
+{
+    using var fixture = new TempFixture();
+    var fileA = fixture.File("a.txt");
+    var fileB = fixture.File("b.txt");
+    var items = RenamePlanner.Build([fileA, fileB], new RenameOptions { Template = "renamed_{P}{S}" });
+    using var lockStream = new FileStream(fileB, FileMode.Open, FileAccess.Read, FileShare.Read);
+    try
+    {
+        RenameExecutor.Execute(items);
+        throw new InvalidOperationException("Expected the locked rename to fail.");
+    }
+    catch (IOException) { }
+    True(System.IO.File.Exists(fileA));
+    True(System.IO.File.Exists(fileB));
+    True(!System.IO.File.Exists(Path.Combine(fixture.Root, "renamed_a.txt")));
+    True(!System.IO.Directory.EnumerateFileSystemEntries(fixture.Root, ".batchrename-*.tmp").Any());
+}
+
+static void TestLockedHistoryRead()
+{
+    using var fixture = new TempFixture();
+    var historyPath = Path.Combine(fixture.Root, "history.json");
+    System.IO.File.WriteAllText(historyPath, "[]");
+    using var lockStream = new FileStream(historyPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+    Equal(0, new HistoryStore(historyPath).Load().Count);
+}
+
+static void TestHistorySaveFailureRollback()
+{
+    using var fixture = new TempFixture();
+    var fileA = fixture.File("a.txt");
+    var fileB = fixture.File("b.txt");
+    var historyPath = Path.Combine(fixture.Root, "history.json");
+    System.IO.File.WriteAllText(historyPath, "[]");
+    var items = RenamePlanner.Build([fileA, fileB], new RenameOptions { Template = "renamed_{P}{S}" });
+    using var lockStream = new FileStream(historyPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+    try
+    {
+        RenameExecutor.ExecuteAndRecord(items, new HistoryStore(historyPath));
+        throw new InvalidOperationException("Expected the history save to fail.");
+    }
+    catch (IOException) { }
+    True(System.IO.File.Exists(fileA));
+    True(System.IO.File.Exists(fileB));
+    True(!System.IO.File.Exists(Path.Combine(fixture.Root, "renamed_a.txt")));
 }
 
 static void TestHistoryPersistence()
