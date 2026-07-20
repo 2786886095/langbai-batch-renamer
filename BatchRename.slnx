@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BatchRename.App/BatchRename.App.csproj" />
+    <Project Path="src/BatchRename.Core/BatchRename.Core.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BatchRename.Tests/BatchRename.Tests.csproj" />
+  </Folder>
+</Solution>

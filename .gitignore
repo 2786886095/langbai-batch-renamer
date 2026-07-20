@@ -1,0 +1,9 @@
+**/bin/
+**/obj/
+artifacts/*
+!artifacts/ui-installed-aligned-final.png
+*.user
+*.suo
+
+# Local signing material. Never commit private certificates or passwords.
+artifacts/certificate/

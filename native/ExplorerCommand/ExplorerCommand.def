@@ -1,0 +1,4 @@
+LIBRARY ExplorerCommand
+EXPORTS
+    DllCanUnloadNow
+    DllGetClassObject

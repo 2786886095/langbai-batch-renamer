@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:desktop5="http://schemas.microsoft.com/appx/manifest/desktop/windows10/5"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap com desktop4 desktop5 rescap">
+  <Identity Name="LangBai.BatchRename" Publisher="CN=LangBai Batch Rename" Version="1.0.0.0" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>批量重命名</DisplayName>
+    <PublisherDisplayName>LangBai</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources><Resource Language="zh-CN" /></Resources>
+  <Applications>
+    <Application Id="BatchRename" Executable="BatchRename.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="批量重命名" Description="安全、可预览、可回退的资源管理器批量重命名工具"
+                          BackgroundColor="transparent" Square44x44Logo="Assets\Square44x44Logo.png" Square150x150Logo="Assets\Square150x150Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <com:Extension Category="windows.comServer">
+          <com:ComServer>
+            <com:SurrogateServer DisplayName="批量重命名资源管理器命令">
+              <com:Class Id="5E57551A-5925-4B90-9D55-70759F511A91" Path="ExplorerCommand.dll" ThreadingModel="STA" />
+            </com:SurrogateServer>
+          </com:ComServer>
+        </com:Extension>
+        <desktop4:Extension Category="windows.fileExplorerContextMenus">
+          <desktop4:FileExplorerContextMenus>
+            <desktop5:ItemType Type="*"><desktop5:Verb Id="BatchRename" Clsid="5E57551A-5925-4B90-9D55-70759F511A91" /></desktop5:ItemType>
+            <desktop5:ItemType Type="Directory"><desktop5:Verb Id="BatchRename" Clsid="5E57551A-5925-4B90-9D55-70759F511A91" /></desktop5:ItemType>
+          </desktop4:FileExplorerContextMenus>
+        </desktop4:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities><rescap:Capability Name="runFullTrust" /></Capabilities>
+</Package>
