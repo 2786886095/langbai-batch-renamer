@@ -51,3 +51,7 @@ dotnet run --project tests\BatchRename.Tests -c Release
 ```
 
 资源管理器扩展使用原生 `IExplorerCommand` 接收完整的 `IShellItemArray` 多选内容，再将选择交给 WPF 应用。验证脚本也支持传入真实路径，检查 `Invoke` 后应用收到的文件/文件夹数量。
+
+## 开源许可
+
+本项目采用 [MIT License](LICENSE) 开源。你可以使用、复制、修改、合并、发布和再分发代码，但需要保留原始版权和许可声明。
