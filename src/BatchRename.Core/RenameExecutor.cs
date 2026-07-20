@@ -26,6 +26,39 @@ public static class RenameExecutor
         }
     }
 
+    public static void UndoAndRecord(RenameHistoryEntry entry, HistoryStore historyStore)
+    {
+        ArgumentNullException.ThrowIfNull(entry);
+        ArgumentNullException.ThrowIfNull(historyStore);
+        Undo(entry);
+        try
+        {
+            historyStore.MarkUndone(entry.Id);
+        }
+        catch (Exception saveError) when (saveError is IOException or UnauthorizedAccessException)
+        {
+            entry.IsUndone = false;
+            try
+            {
+                Execute(entry.Operations.Select(operation => new RenamePlanItem
+                {
+                    SourcePath = operation.OriginalPath,
+                    OriginalName = Path.GetFileName(operation.OriginalPath),
+                    IsDirectory = operation.IsDirectory,
+                    LastWriteTime = DateTime.MinValue,
+                    SuggestedName = Path.GetFileName(operation.RenamedPath),
+                    NewName = Path.GetFileName(operation.RenamedPath)
+                }).ToList());
+            }
+            catch (Exception rollbackError) when (rollbackError is IOException or UnauthorizedAccessException or RenameValidationException)
+            {
+                throw new IOException("文件已恢复原名称，但历史状态保存失败，且无法自动恢复重命名后的状态。请立即检查文件状态。",
+                    new AggregateException(saveError, rollbackError));
+            }
+            throw new IOException("无法保存回退状态，已自动恢复到回退前的名称。", saveError);
+        }
+    }
+
     public static RenameHistoryEntry Execute(IReadOnlyList<RenamePlanItem> items)
     {
         if (!RenameValidator.Validate(items))

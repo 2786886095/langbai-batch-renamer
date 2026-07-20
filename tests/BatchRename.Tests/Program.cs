@@ -1,6 +1,6 @@
 using BatchRename.Core;
 
-var tests = new (string Name, Action Run)[]
+var tests = new List<(string Name, Action Run)>
 {
     ("模板、查找替换和名称排序", TestPlanning),
     ("补零序号", TestPaddedSequence),
@@ -14,7 +14,14 @@ var tests = new (string Name, Action Run)[]
     ("超长名称在预览阶段被阻止", TestLongNameValidation),
     ("历史文件被占用时安全降级", TestLockedHistoryRead),
     ("历史记录跨进程持久化", TestHistoryPersistence)
+    ,("回退状态保存失败时恢复到回退前", TestUndoHistorySaveFailureRollback)
+    ,("损坏历史不会在新增记录时被覆盖", TestCorruptHistoryIsNotOverwritten)
+    ,("高复杂度正则会超时终止", TestRegexTimeout)
+    ,("一万项预览保持完整", TestLargeBatchPlanning)
+    ,("总路径超过 260 字符仍可执行并回退", TestLongPathExecuteAndUndo)
 };
+if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BATCH_RENAME_UNC_TEST_ROOT")))
+    tests.Add(("UNC 网络共享执行并回退", TestUncExecuteAndUndo));
 
 var failures = 0;
 foreach (var test in tests)
@@ -31,7 +38,7 @@ foreach (var test in tests)
     }
 }
 
-Console.WriteLine($"{tests.Length - failures}/{tests.Length} tests passed");
+Console.WriteLine($"{tests.Count - failures}/{tests.Count} tests passed");
 return failures == 0 ? 0 : 1;
 
 static void TestPlanning()
@@ -220,6 +227,114 @@ static void TestHistoryPersistence()
     Equal(entry.Id, loaded.Single().Id);
     store.MarkUndone(entry.Id);
     True(new HistoryStore(historyPath).Load().Single().IsUndone);
+}
+
+static void TestUndoHistorySaveFailureRollback()
+{
+    using var fixture = new TempFixture();
+    var original = fixture.File("a.txt");
+    var historyPath = Path.Combine(fixture.Root, "history.json");
+    var store = new HistoryStore(historyPath);
+    var entry = RenameExecutor.ExecuteAndRecord(
+        RenamePlanner.Build([original], new RenameOptions { Template = "renamed_{P}{S}" }), store);
+    using var lockStream = new FileStream(historyPath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+    try
+    {
+        RenameExecutor.UndoAndRecord(entry, store);
+        throw new InvalidOperationException("Expected the history update to fail.");
+    }
+    catch (IOException) { }
+    True(!System.IO.File.Exists(original));
+    True(System.IO.File.Exists(Path.Combine(fixture.Root, "renamed_a.txt")));
+    True(!entry.IsUndone);
+}
+
+static void TestCorruptHistoryIsNotOverwritten()
+{
+    using var fixture = new TempFixture();
+    var historyPath = Path.Combine(fixture.Root, "history.json");
+    const string corrupt = "{not-json";
+    System.IO.File.WriteAllText(historyPath, corrupt);
+    try
+    {
+        new HistoryStore(historyPath).Add(new RenameHistoryEntry());
+        throw new InvalidOperationException("Expected corrupt history to block the write.");
+    }
+    catch (InvalidDataException) { }
+    Equal(corrupt, System.IO.File.ReadAllText(historyPath));
+}
+
+static void TestRegexTimeout()
+{
+    using var fixture = new TempFixture();
+    var path = fixture.File(new string('a', 240) + "b.txt");
+    try
+    {
+        RenamePlanner.Build([path], new RenameOptions
+        {
+            Template = "{P}{S}",
+            SearchText = "^(a+)+$",
+            ReplaceText = "x",
+            UseRegex = true
+        });
+    }
+    catch (RenameValidationException ex) when (ex.Message.Contains("超时"))
+    {
+        return;
+    }
+    throw new InvalidOperationException("Expected pathological regex to time out.");
+}
+
+static void TestLargeBatchPlanning()
+{
+    using var fixture = new TempFixture();
+    var paths = Enumerable.Range(1, 10_000)
+        .Select(index => Path.Combine(fixture.Root, $"item{index}.txt"))
+        .ToArray();
+    foreach (var path in paths) System.IO.File.WriteAllText(path, string.Empty);
+    var items = RenamePlanner.Build(paths.Reverse(), new RenameOptions { Template = "batch_{zN}{S}", PaddingWidth = 5 });
+    Equal(10_000, items.Count);
+    Equal("item1.txt", items[0].OriginalName);
+    Equal("batch_00001.txt", items[0].NewName);
+    Equal("item10000.txt", items[^1].OriginalName);
+}
+
+static void TestLongPathExecuteAndUndo()
+{
+    using var fixture = new TempFixture();
+    var directory = fixture.Root;
+    while (directory.Length < 280)
+    {
+        directory = Path.Combine(directory, "segment_1234567890");
+        System.IO.Directory.CreateDirectory(directory);
+    }
+    var original = Path.Combine(directory, "a.txt");
+    System.IO.File.WriteAllText(original, "long-path");
+    var entry = RenameExecutor.Execute(RenamePlanner.Build([original], new RenameOptions { Template = "renamed_{P}{S}" }));
+    var renamed = Path.Combine(directory, "renamed_a.txt");
+    True(System.IO.File.Exists(renamed));
+    RenameExecutor.Undo(entry);
+    True(System.IO.File.Exists(original));
+}
+
+static void TestUncExecuteAndUndo()
+{
+    var basePath = Environment.GetEnvironmentVariable("BATCH_RENAME_UNC_TEST_ROOT")!;
+    var root = Path.Combine(basePath, "BatchRename.Unc.Tests", Guid.NewGuid().ToString("N"));
+    System.IO.Directory.CreateDirectory(root);
+    try
+    {
+        var original = Path.Combine(root, "network.txt");
+        System.IO.File.WriteAllText(original, "unc");
+        var entry = RenameExecutor.Execute(RenamePlanner.Build([original], new RenameOptions { Template = "renamed_{P}{S}" }));
+        True(System.IO.File.Exists(Path.Combine(root, "renamed_network.txt")));
+        RenameExecutor.Undo(entry);
+        True(System.IO.File.Exists(original));
+    }
+    finally
+    {
+        System.IO.Directory.Delete(root, true);
+    }
 }
 
 static void True(bool condition)

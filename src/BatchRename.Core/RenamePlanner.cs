@@ -25,7 +25,7 @@ public static partial class RenamePlanner
         {
             try
             {
-                searchRegex = new Regex(options.SearchText, RegexOptions.CultureInvariant);
+                searchRegex = new Regex(options.SearchText, RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(250));
             }
             catch (ArgumentException ex)
             {
@@ -52,7 +52,15 @@ public static partial class RenamePlanner
             var originalName = candidate.Name;
             var extension = isDirectory ? string.Empty : Path.GetExtension(originalName);
             var prefix = isDirectory ? originalName : Path.GetFileNameWithoutExtension(originalName);
-            var changedPrefix = ApplySearch(prefix, options, searchRegex);
+            string changedPrefix;
+            try
+            {
+                changedPrefix = ApplySearch(prefix, options, searchRegex);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                throw new RenameValidationException("正则表达式执行超时，请简化表达式以避免界面长时间无响应。");
+            }
             var lastWrite = candidate.LastWriteTime;
             var generated = ExpandTemplate(options.Template, changedPrefix, extension, lastWrite, index, options);
 

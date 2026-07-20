@@ -32,7 +32,7 @@ public sealed class HistoryStore
 
     public void Add(RenameHistoryEntry entry)
     {
-        var entries = Load();
+        var entries = LoadForUpdate();
         entries.Insert(0, entry);
         if (entries.Count > 50) entries.RemoveRange(50, entries.Count - 50);
         Save(entries);
@@ -40,11 +40,24 @@ public sealed class HistoryStore
 
     public void MarkUndone(Guid id)
     {
-        var entries = Load();
+        var entries = LoadForUpdate();
         var entry = entries.FirstOrDefault(candidate => candidate.Id == id);
-        if (entry is null) return;
+        if (entry is null) throw new InvalidDataException("找不到要标记为已回退的历史记录。");
         entry.IsUndone = true;
         Save(entries);
+    }
+
+    private List<RenameHistoryEntry> LoadForUpdate()
+    {
+        if (!File.Exists(FilePath)) return [];
+        try
+        {
+            return JsonSerializer.Deserialize<List<RenameHistoryEntry>>(File.ReadAllText(FilePath), JsonOptions) ?? [];
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidDataException("历史文件已损坏，已停止写入以避免覆盖原记录。", ex);
+        }
     }
 
     private void Save(List<RenameHistoryEntry> entries)

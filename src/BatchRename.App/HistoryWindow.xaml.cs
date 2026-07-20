@@ -22,7 +22,7 @@ public partial class HistoryWindow : Window
         if (MessageBox.Show(this, $"将把 {row.Entry.Operations.Count} 个项目恢复到本次重命名前的名称。", "确认回退", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK) return;
         try
         {
-            RenameExecutor.Undo(row.Entry); _store.MarkUndone(row.Entry.Id); Reload();
+            RenameExecutor.UndoAndRecord(row.Entry, _store); Reload();
             MessageBox.Show(this, "已恢复原名称。", "回退完成", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or RenameValidationException)
