@@ -1,6 +1,7 @@
-param([string]$Version = "1.0.0")
+param([string]$Version = "1.1.0")
 
 $ErrorActionPreference = "Stop"
+if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must use major.minor.patch format, for example 1.1.0." }
 $projectRoot = Split-Path -Parent $PSScriptRoot
 $sdkRoot = "C:\Program Files (x86)\Windows Kits\10"
 $sdkVersion = (Get-ChildItem "$sdkRoot\bin" -Directory | Where-Object Name -Match '^10\.0\.' | Sort-Object Name -Descending | Select-Object -First 1).Name
@@ -14,7 +15,7 @@ $packagePath = Join-Path $packageDirectory "BatchRename.msix"
 
 & (Join-Path $PSScriptRoot "Generate-Assets.ps1")
 & (Join-Path $PSScriptRoot "Build-Native.ps1")
-dotnet publish (Join-Path $projectRoot "src\BatchRename.App\BatchRename.App.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -o $publishDirectory
+dotnet publish (Join-Path $projectRoot "src\BatchRename.App\BatchRename.App.csproj") -c Release -r win-x64 --self-contained true -p:PublishSingleFile=false -p:Version=$Version -o $publishDirectory
 if ($LASTEXITCODE -ne 0) { throw "Application publish failed." }
 
 if (Test-Path $stageDirectory) { Remove-Item -LiteralPath $stageDirectory -Recurse -Force }
@@ -23,6 +24,10 @@ Copy-Item -Path (Join-Path $publishDirectory "*") -Destination $stageDirectory -
 Copy-Item -LiteralPath (Join-Path $projectRoot "artifacts\native\x64\ExplorerCommand.dll") -Destination $stageDirectory
 Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\AppxManifest.xml") -Destination $stageDirectory
 Copy-Item -LiteralPath (Join-Path $projectRoot "packaging\Assets") -Destination $stageDirectory -Recurse
+$stageManifest = Join-Path $stageDirectory "AppxManifest.xml"
+[xml]$manifest = Get-Content -LiteralPath $stageManifest -Raw -Encoding UTF8
+$manifest.Package.Identity.Version = "$Version.0"
+$manifest.Save($stageManifest)
 Get-ChildItem -LiteralPath $stageDirectory -Recurse -Filter *.pdb -File | ForEach-Object { Remove-Item -LiteralPath $_.FullName -Force }
 
 $pfxPath = Join-Path $certificateDirectory "BatchRename.pfx"
@@ -55,7 +60,7 @@ if ($LASTEXITCODE -ne 0) { throw "MSIX packaging failed." }
 & $signTool sign /fd SHA256 /f $pfxPath /p $passwordText $packagePath
 if ($LASTEXITCODE -ne 0) { throw "MSIX signing failed." }
 
-& "C:\ProgramData\chocolatey\bin\ISCC.exe" (Join-Path $projectRoot "installer\BatchRename.iss")
+& "C:\ProgramData\chocolatey\bin\ISCC.exe" "/DMyAppVersion=$Version" (Join-Path $projectRoot "installer\BatchRename.iss")
 if ($LASTEXITCODE -ne 0) { throw "Installer build failed." }
 
 $installerPath = Join-Path $projectRoot "artifacts\installer\BatchRename-Setup-$Version-x64.exe"

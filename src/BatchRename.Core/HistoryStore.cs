@@ -12,10 +12,7 @@ public sealed class HistoryStore
 
     public HistoryStore(string? filePath = null)
     {
-        FilePath = filePath ?? Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-            "BatchRename",
-            "history.json");
+        FilePath = filePath ?? Path.Combine(AppDataPaths.BaseDirectory, "history.json");
     }
 
     public string FilePath { get; }

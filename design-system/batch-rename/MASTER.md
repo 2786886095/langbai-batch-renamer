@@ -51,11 +51,17 @@ Do not rely on color alone; every status includes an icon and text.
 
 - The default `{P}{S}` rule performs no changes.
 - Rule edits update preview immediately; manual target-name edits are explicitly labelled.
+- Saved naming schemes include rule, replacement, sequence, time-format, and sort settings; they persist only in local app data.
+- Sort choices are name, modified time, file size, and type, with an explicit descending toggle.
 - Invalid input appears inline or in the persistent validation bar before submission.
 - Execute stays disabled while any item is invalid or unchanged.
+- The main action opens a separate final preview; disk changes are available only from that final confirmation window.
+- Closed combo boxes forward mouse-wheel input to the rule panel instead of changing values.
+- Every editable text field exposes native keyboard shortcuts plus a Chinese Cut/Copy/Paste/Select All context menu.
 - Keyboard access: Ctrl+O add files, Ctrl+Shift+O add folders, F5 refresh, Ctrl+H history, Ctrl+Enter execute.
 - All actions have visible focus and descriptive tooltips.
 - The filesystem operation always requires a confirmation and writes an undo record.
+- Original names use muted read-only styling; proposed names use blue semibold styling with an arrow between them.
 
 ## Iconography and motion
 

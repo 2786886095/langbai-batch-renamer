@@ -4,6 +4,8 @@ var tests = new (string Name, Action Run)[]
 {
     ("模板、查找替换和名称排序", TestPlanning),
     ("补零序号", TestPaddedSequence),
+    ("日期、大小、类型和倒序排序", TestSortModes),
+    ("命名方案本地保存、覆盖和删除", TestPresetPersistence),
     ("文件与文件夹执行后可回退", TestExecuteAndUndo),
     ("重复目标冲突", TestDuplicateCollision),
     ("外部目标占用冲突", TestExistingTargetCollision),
@@ -56,6 +58,60 @@ static void TestPaddedSequence()
     Equal("08.txt", items[0].NewName);
     Equal("09.txt", items[1].NewName);
     Equal("10.txt", items[2].NewName);
+}
+
+static void TestSortModes()
+{
+    using var fixture = new TempFixture();
+    var smallText = fixture.File("small.txt");
+    var largeLog = fixture.File("large.log");
+    var middleText = fixture.File("middle.txt");
+    System.IO.File.WriteAllText(smallText, "1");
+    System.IO.File.WriteAllText(middleText, "12345");
+    System.IO.File.WriteAllText(largeLog, new string('x', 20));
+    System.IO.File.SetLastWriteTime(smallText, new DateTime(2026, 1, 1));
+    System.IO.File.SetLastWriteTime(middleText, new DateTime(2026, 1, 2));
+    System.IO.File.SetLastWriteTime(largeLog, new DateTime(2026, 1, 3));
+    var paths = new[] { middleText, largeLog, smallText };
+
+    var byDate = RenamePlanner.Build(paths, new RenameOptions { Template = "{N}{S}", SortBy = RenameSortBy.ModifiedTime });
+    Equal("small.txt", byDate[0].OriginalName);
+    Equal("large.log", byDate[2].OriginalName);
+
+    var bySizeDescending = RenamePlanner.Build(paths, new RenameOptions { Template = "{N}{S}", SortBy = RenameSortBy.Size, SortDescending = true });
+    Equal("large.log", bySizeDescending[0].OriginalName);
+    Equal("small.txt", bySizeDescending[2].OriginalName);
+
+    var byType = RenamePlanner.Build(paths, new RenameOptions { Template = "{N}{S}", SortBy = RenameSortBy.Type });
+    Equal("large.log", byType[0].OriginalName);
+    True(byType.Skip(1).All(item => item.OriginalName.EndsWith(".txt", StringComparison.Ordinal)));
+}
+
+static void TestPresetPersistence()
+{
+    using var fixture = new TempFixture();
+    var presetPath = Path.Combine(fixture.Root, "presets.json");
+    var store = new PresetStore(presetPath);
+    store.Save("漫画序号", new RenameOptions
+    {
+        Template = "分镜_{zN}_{P}{S}",
+        StartNumber = 8,
+        PaddingWidth = 4,
+        TimeFormat = "yyyy-MM-dd",
+        SortBy = RenameSortBy.ModifiedTime,
+        SortDescending = true
+    });
+
+    var loaded = new PresetStore(presetPath).Load().Single();
+    Equal("漫画序号", loaded.Name);
+    Equal("分镜_{zN}_{P}{S}", loaded.Options.Template);
+    Equal(RenameSortBy.ModifiedTime, loaded.Options.SortBy);
+    True(loaded.Options.SortDescending);
+
+    store.Save("漫画序号", new RenameOptions { Template = "覆盖_{N}{S}" });
+    Equal("覆盖_{N}{S}", store.Load().Single().Options.Template);
+    store.Delete("漫画序号");
+    Equal(0, store.Load().Count);
 }
 
 static void TestExecuteAndUndo()

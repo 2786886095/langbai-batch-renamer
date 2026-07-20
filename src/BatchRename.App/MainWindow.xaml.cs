@@ -17,14 +17,16 @@ public static class AppCommands
     public static readonly RoutedUICommand AddFolders = new("添加文件夹", nameof(AddFolders), typeof(AppCommands));
     public static readonly RoutedUICommand RefreshPreview = new("重新生成预览", nameof(RefreshPreview), typeof(AppCommands));
     public static readonly RoutedUICommand OpenHistory = new("回退历史", nameof(OpenHistory), typeof(AppCommands));
-    public static readonly RoutedUICommand ExecuteRename = new("确认批量重命名", nameof(ExecuteRename), typeof(AppCommands));
+    public static readonly RoutedUICommand ExecuteRename = new("打开最终预览", nameof(ExecuteRename), typeof(AppCommands));
 }
 
 public partial class MainWindow : Window, INotifyPropertyChanged
 {
     private readonly List<string> _paths = [];
     private readonly HistoryStore _historyStore = new();
+    private readonly PresetStore _presetStore = new();
     private bool _isLoaded;
+    private bool _isApplyingPreset;
     private string _lastRuleError = string.Empty;
 
     public MainWindow(IReadOnlyList<string> initialPaths)
@@ -32,10 +34,12 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         InitializeComponent();
         DataContext = this;
         AddPaths(initialPaths);
+        LoadPresets();
         Loaded += (_, _) => { _isLoaded = true; RegeneratePreview(); };
     }
 
     public ObservableCollection<RenameRowViewModel> Rows { get; } = [];
+    public ObservableCollection<RenamePreset> Presets { get; } = [];
     public event PropertyChangedEventHandler? PropertyChanged;
 
     private RenameOptions? ReadOptions()
@@ -54,6 +58,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         var timeFormat = TimeFormatBox.Text;
         if (string.IsNullOrWhiteSpace(timeFormat) && TimeFormatBox.SelectedItem is ComboBoxItem item)
             timeFormat = item.Content?.ToString() ?? "yyyyMMdd_HHmmss";
+        var sortBy = Enum.TryParse<RenameSortBy>(SortByBox.SelectedValue?.ToString(), out var parsedSort)
+            ? parsedSort
+            : RenameSortBy.Name;
         _lastRuleError = string.Empty;
         return new RenameOptions
         {
@@ -63,13 +70,16 @@ public partial class MainWindow : Window, INotifyPropertyChanged
             UseRegex = RegexCheck.IsChecked == true,
             StartNumber = start,
             PaddingWidth = width,
-            TimeFormat = timeFormat
+            TimeFormat = timeFormat,
+            SortBy = sortBy,
+            SortDescending = SortDescendingCheck.IsChecked == true
         };
     }
 
     private void RegeneratePreview()
     {
         if (!_isLoaded) return;
+        UpdateHelperText();
         var options = ReadOptions();
         if (options is null) { SetRuleError(_lastRuleError); return; }
         try
@@ -118,9 +128,10 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var fileCount = _paths.Count(File.Exists);
         var folderCount = _paths.Count(Directory.Exists);
+        var sortDescription = GetSortDescription();
         SelectionSummary.Text = _paths.Count == 0
-            ? "尚未添加项目 · 文件和文件夹按名称自然排序"
-            : $"已选择 {_paths.Count} 项 · {fileCount} 个文件 · {folderCount} 个文件夹 · 按名称自然排序";
+            ? $"尚未添加项目 · {sortDescription}"
+            : $"已选择 {_paths.Count} 项 · {fileCount} 个文件 · {folderCount} 个文件夹 · {sortDescription}";
     }
 
     private void AddPaths(IEnumerable<string> paths)
@@ -133,7 +144,14 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         if (_isLoaded) RegeneratePreview();
     }
 
-    private void RuleChanged(object sender, EventArgs e) { if (_isLoaded) RegeneratePreview(); }
+    private void RuleChanged(object sender, EventArgs e)
+    {
+        if (!_isLoaded || _isApplyingPreset) return;
+        PresetStatusText.Text = PresetBox.SelectedItem is RenamePreset preset
+            ? $"当前设置已修改；点击“保存”可覆盖“{preset.Name}”。"
+            : "当前设置尚未保存为本地方案。";
+        RegeneratePreview();
+    }
     private void Row_PropertyChanged(object? sender, PropertyChangedEventArgs e) { if (e.PropertyName == nameof(RenameRowViewModel.NewName)) ValidateRows(); }
 
     private void InsertToken_Click(object sender, RoutedEventArgs e)
@@ -175,11 +193,8 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var items = Rows.Select(row => row.Model).ToList();
         if (!RenameValidator.Validate(items)) { ValidateRows(); return; }
-        var count = items.Count(item => item.HasChange);
-        var answer = MessageBox.Show(this,
-            $"即将重命名 {count} 个项目。\n\n已检查无名称冲突，操作完成后可从“回退历史”撤销。",
-            "确认批量重命名", MessageBoxButton.OKCancel, MessageBoxImage.Information);
-        if (answer != MessageBoxResult.OK) return;
+        var finalPreview = new FinalPreviewWindow(items) { Owner = this };
+        if (finalPreview.ShowDialog() != true) return;
 
         try
         {
@@ -211,6 +226,144 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
     private void Window_Drop(object sender, DragEventArgs e) { if (e.Data.GetData(DataFormats.FileDrop) is string[] paths) AddPaths(paths); }
     private void PreviewGrid_CellEditEnding(object sender, DataGridCellEditEndingEventArgs e) => Dispatcher.BeginInvoke(ValidateRows);
+
+    private void LoadPresets(string? selectName = null)
+    {
+        _isApplyingPreset = true;
+        Presets.Clear();
+        foreach (var preset in _presetStore.Load()) Presets.Add(preset);
+        PresetBox.SelectedItem = selectName is null
+            ? null
+            : Presets.FirstOrDefault(item => string.Equals(item.Name, selectName, StringComparison.CurrentCultureIgnoreCase));
+        if (PresetBox.SelectedItem is null) PresetBox.Text = Presets.Count == 0 ? "尚无已保存方案" : "选择已保存方案";
+        DeletePresetButton.IsEnabled = PresetBox.SelectedItem is RenamePreset;
+        _isApplyingPreset = false;
+    }
+
+    private void PresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        DeletePresetButton.IsEnabled = PresetBox.SelectedItem is RenamePreset;
+        if (!_isLoaded || _isApplyingPreset || PresetBox.SelectedItem is not RenamePreset preset) return;
+
+        _isApplyingPreset = true;
+        var options = preset.Options;
+        TemplateBox.Text = options.Template;
+        SearchBox.Text = options.SearchText;
+        ReplaceBox.Text = options.ReplaceText;
+        RegexCheck.IsChecked = options.UseRegex;
+        StartNumberBox.Text = options.StartNumber.ToString();
+        PaddingWidthBox.Text = options.PaddingWidth.ToString();
+        TimeFormatBox.SelectedIndex = -1;
+        TimeFormatBox.Text = options.TimeFormat;
+        SortByBox.SelectedValue = options.SortBy.ToString();
+        SortDescendingCheck.IsChecked = options.SortDescending;
+        _isApplyingPreset = false;
+        PresetStatusText.Text = $"已载入本机方案“{preset.Name}”。";
+        RegeneratePreview();
+    }
+
+    private void SavePreset_Click(object sender, RoutedEventArgs e)
+    {
+        var options = ReadOptions();
+        if (options is null) { SetRuleError(_lastRuleError); return; }
+        var suggestedName = PresetBox.SelectedItem is RenamePreset selected ? selected.Name : "我的命名方案";
+        var dialog = new SavePresetWindow(suggestedName) { Owner = this };
+        if (dialog.ShowDialog() != true) return;
+
+        var exists = Presets.Any(item => string.Equals(item.Name, dialog.PresetName, StringComparison.CurrentCultureIgnoreCase));
+        if (exists && MessageBox.Show(this, $"“{dialog.PresetName}”已经存在，是否用当前设置覆盖？", "覆盖命名方案", MessageBoxButton.OKCancel, MessageBoxImage.Question) != MessageBoxResult.OK)
+            return;
+
+        try
+        {
+            _presetStore.Save(dialog.PresetName, options);
+            LoadPresets(dialog.PresetName);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"无法将方案写入本机配置目录。\n\n{ex.Message}", "保存方案失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+        PresetStatusText.Text = $"已保存本机方案“{dialog.PresetName}”。";
+        ValidationText.Foreground = (Brush)FindResource("MutedBrush");
+        ValidationText.Text = $"已将当前规则保存为“{dialog.PresetName}”。";
+    }
+
+    private void DeletePreset_Click(object sender, RoutedEventArgs e)
+    {
+        if (PresetBox.SelectedItem is not RenamePreset preset) return;
+        if (MessageBox.Show(this, $"确定删除本机方案“{preset.Name}”吗？此操作不会删除文件。", "删除命名方案", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+            return;
+        try
+        {
+            _presetStore.Delete(preset.Name);
+            LoadPresets();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"无法更新本机方案文件。\n\n{ex.Message}", "删除方案失败", MessageBoxButton.OK, MessageBoxImage.Error);
+            return;
+        }
+        PresetStatusText.Text = "当前设置尚未保存为本地方案。";
+        ValidationText.Foreground = (Brush)FindResource("MutedBrush");
+        ValidationText.Text = $"已删除本机方案“{preset.Name}”。";
+    }
+
+    private void ComboBox_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is ComboBox { IsDropDownOpen: true }) return;
+        e.Handled = true;
+        var lines = Math.Max(1, SystemParameters.WheelScrollLines);
+        for (var index = 0; index < lines; index++)
+        {
+            if (e.Delta > 0) RuleScrollViewer.LineUp();
+            else RuleScrollViewer.LineDown();
+        }
+    }
+
+    private void UpdateHelperText()
+    {
+        StartHintText.Text = int.TryParse(StartNumberBox.Text, out var start)
+            ? $"仅 {{N}}/{{zN}} 使用：首项 {start}，随后 {start + 1}、{start + 2}……"
+            : "请输入整数；它决定 {N}/{zN} 的第一个序号。";
+        PaddingHintText.Text = int.TryParse(PaddingWidthBox.Text, out var width) && width is >= 1 and <= 12
+            ? $"仅 {{zN}} 使用：{Math.Max(0, start).ToString().PadLeft(width, '0')}、{Math.Max(0, start + 1).ToString().PadLeft(width, '0')}……"
+            : "请输入 1–12；用于在序号左侧补 0。";
+
+        var timeFormat = TimeFormatBox.Text;
+        if (string.IsNullOrWhiteSpace(timeFormat) && TimeFormatBox.SelectedItem is ComboBoxItem item)
+            timeFormat = item.Content?.ToString() ?? string.Empty;
+        try
+        {
+            var example = new DateTime(2026, 7, 20, 14, 30, 25).ToString(timeFormat);
+            TimeHintText.Text = $"仅 {{T}} 使用：yyyy=年，MM=月，dd=日，HH=时，mm=分，ss=秒；示例 {example}";
+        }
+        catch (FormatException)
+        {
+            TimeHintText.Text = "格式无效；可使用 yyyyMMdd_HHmmss，例如 20260720_143025。";
+        }
+
+        SortHintText.Text = SortByBox.SelectedValue?.ToString() switch
+        {
+            nameof(RenameSortBy.ModifiedTime) => "按最后修改时间排列；勾选倒序可让最新项目排在前面。",
+            nameof(RenameSortBy.Size) => "按文件字节大小排列；文件夹大小按 0 处理。",
+            nameof(RenameSortBy.Type) => "文件夹优先，再按文件扩展名排列；同类型按名称自然排序。",
+            _ => "名称中的数字按实际大小排序，例如 2 会排在 10 前面。"
+        };
+    }
+
+    private string GetSortDescription()
+    {
+        var label = SortByBox.SelectedValue?.ToString() switch
+        {
+            nameof(RenameSortBy.ModifiedTime) => "按修改日期",
+            nameof(RenameSortBy.Size) => "按大小",
+            nameof(RenameSortBy.Type) => "按类型",
+            _ => "按名称自然排序"
+        };
+        return SortDescendingCheck.IsChecked == true ? $"{label}（倒序）" : label;
+    }
+
     protected void OnPropertyChanged([CallerMemberName] string? propertyName = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
 }
 

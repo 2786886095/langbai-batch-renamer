@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)][string]$Reference,
     [Parameter(Mandatory = $true)][string]$Implementation,
-    [Parameter(Mandatory = $true)][string]$Output
+    [Parameter(Mandatory = $true)][string]$Output,
+    [string]$ReferenceLabel = 'Reference: MT Manager',
+    [string]$ImplementationLabel = 'Implementation: Windows app'
 )
 
 Add-Type -AssemblyName System.Drawing
@@ -23,9 +25,9 @@ try {
         $font = [System.Drawing.Font]::new('Microsoft YaHei UI', 13, [System.Drawing.FontStyle]::Bold)
         $brush = [System.Drawing.SolidBrush]::new([System.Drawing.Color]::FromArgb(15, 23, 42))
         try {
-            $graphics.DrawString('Reference: MT Manager', $font, $brush, $gutter, 12)
+            $graphics.DrawString($ReferenceLabel, $font, $brush, $gutter, 12)
             $implementationX = $referenceWidth + $gutter * 2
-            $graphics.DrawString('Implementation: Windows app', $font, $brush, $implementationX, 12)
+            $graphics.DrawString($ImplementationLabel, $font, $brush, $implementationX, 12)
             $graphics.DrawImage($referenceImage, $gutter, $labelHeight, $referenceWidth, $contentHeight)
             $graphics.DrawImage($implementationImage, $implementationX, $labelHeight, $implementationWidth, $contentHeight)
         }

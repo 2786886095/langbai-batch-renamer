@@ -1,5 +1,7 @@
 #define MyAppName "Batch Rename"
-#define MyAppVersion "1.0.0"
+#ifndef MyAppVersion
+  #define MyAppVersion "1.1.0"
+#endif
 #define MyAppPublisher "LangBai"
 
 [Setup]
@@ -19,7 +21,7 @@ SolidCompression=yes
 WizardStyle=modern
 SetupIconFile=..\src\BatchRename.App\Assets\BatchRename.ico
 UninstallDisplayName=Batch Rename (Explorer context menu)
-VersionInfoVersion=1.0.0.0
+VersionInfoVersion={#MyAppVersion}.0
 VersionInfoDescription=Safe, previewable and undoable Explorer batch rename utility
 
 [Tasks]

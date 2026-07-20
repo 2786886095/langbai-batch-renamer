@@ -41,12 +41,22 @@
         </Border>
 
         <Grid Grid.Row="1" Margin="22">
-            <Grid.ColumnDefinitions><ColumnDefinition Width="380"/><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition Width="400"/><ColumnDefinition Width="14"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
             <Border Grid.Column="0" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="1" CornerRadius="10">
-                <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                <ScrollViewer x:Name="RuleScrollViewer" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
                     <StackPanel Margin="22">
                         <TextBlock Text="命名规则" FontSize="18" FontWeight="SemiBold"/>
                         <TextBlock Text="规则会立即生成右侧预览，不会直接改动磁盘。" Foreground="{StaticResource MutedBrush}" Margin="0,5,0,14"/>
+
+                        <TextBlock Text="本地命名方案" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <ComboBox x:Name="PresetBox" ItemsSource="{Binding Presets}" DisplayMemberPath="Name" TextSearch.TextPath="Name" IsEditable="True" IsReadOnly="True" Text="选择已保存方案" SelectionChanged="PresetBox_SelectionChanged" PreviewMouseWheel="ComboBox_PreviewMouseWheel" AutomationProperties.Name="已保存命名方案" AutomationProperties.AutomationId="PresetBox" ToolTip="选择本机保存的命名方案"/>
+                            <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Padding="11,7" Content="保存" Click="SavePreset_Click" ToolTip="保存当前规则、排序和序号设置"/>
+                            <Button x:Name="DeletePresetButton" Grid.Column="4" Style="{StaticResource SecondaryButton}" Padding="11,7" Content="删除" Click="DeletePreset_Click" IsEnabled="False" ToolTip="删除当前选中的本地方案"/>
+                        </Grid>
+                        <TextBlock x:Name="PresetStatusText" Text="保存在此电脑，不会上传；同名保存会覆盖原方案。" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,0,0,16"/>
+
                         <TextBox x:Name="TemplateBox" Text="{}{P}{S}" FontFamily="Consolas" FontSize="17" TextChanged="RuleChanged" ToolTip="输入命名规则，例如 作品_{zN}_{P}{S}" AutomationProperties.Name="命名规则" AutomationProperties.AutomationId="TemplateBox"/>
                         <WrapPanel Margin="0,10,0,18">
                             <Button Style="{StaticResource TokenButton}" Content="{}{P}" Tag="{}{P}" Click="InsertToken_Click" ToolTip="插入原文件名"/>
@@ -63,15 +73,29 @@
                         </Grid>
                         <CheckBox x:Name="RegexCheck" Content="使用正则表达式查找替换" Margin="0,12,0,18" Checked="RuleChanged" Unchecked="RuleChanged"/>
 
+                        <TextBlock Text="文件排序" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                        <Grid Margin="0,0,0,5">
+                            <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <ComboBox x:Name="SortByBox" SelectedValuePath="Tag" SelectedIndex="0" SelectionChanged="RuleChanged" PreviewMouseWheel="ComboBox_PreviewMouseWheel" AutomationProperties.Name="排序方式" AutomationProperties.AutomationId="SortByBox">
+                                <ComboBoxItem Content="按名称（自然排序）" Tag="Name"/>
+                                <ComboBoxItem Content="按修改日期" Tag="ModifiedTime"/>
+                                <ComboBoxItem Content="按文件大小" Tag="Size"/>
+                                <ComboBoxItem Content="按类型" Tag="Type"/>
+                            </ComboBox>
+                            <CheckBox x:Name="SortDescendingCheck" Grid.Column="2" Content="倒序" VerticalAlignment="Center" Checked="RuleChanged" Unchecked="RuleChanged" AutomationProperties.Name="倒序排列"/>
+                        </Grid>
+                        <TextBlock x:Name="SortHintText" Text="名称中的数字按实际大小排序，例如 2 会排在 10 前面。" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,0,0,16"/>
+
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="12"/><ColumnDefinition/></Grid.ColumnDefinitions>
-                            <StackPanel><TextBlock Text="起始序号" FontWeight="SemiBold" Margin="0,0,0,6"/><TextBox x:Name="StartNumberBox" Text="1" TextChanged="RuleChanged" ToolTip="{}{N} 和 {zN} 从这里开始递增" AutomationProperties.Name="起始序号"/></StackPanel>
-                            <StackPanel Grid.Column="2"><TextBlock Text="补零位数" FontWeight="SemiBold" Margin="0,0,0,6"/><TextBox x:Name="PaddingWidthBox" Text="3" TextChanged="RuleChanged" ToolTip="例如 3 位会生成 001、002、003" AutomationProperties.Name="补零位数"/></StackPanel>
+                            <StackPanel><TextBlock Text="起始序号" FontWeight="SemiBold" Margin="0,0,0,6"/><TextBox x:Name="StartNumberBox" Text="1" TextChanged="RuleChanged" ToolTip="{}{N} 和 {zN} 从这里开始递增" AutomationProperties.Name="起始序号" AutomationProperties.AutomationId="StartNumberBox"/><TextBlock x:Name="StartHintText" Text="首项为 1，后续依次为 2、3……" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,5,0,0"/></StackPanel>
+                            <StackPanel Grid.Column="2"><TextBlock Text="补零位数" FontWeight="SemiBold" Margin="0,0,0,6"/><TextBox x:Name="PaddingWidthBox" Text="3" TextChanged="RuleChanged" ToolTip="例如 3 位会生成 001、002、003" AutomationProperties.Name="补零位数" AutomationProperties.AutomationId="PaddingWidthBox"/><TextBlock x:Name="PaddingHintText" Text="仅 {zN} 使用：001、002……" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,5,0,0"/></StackPanel>
                         </Grid>
                         <TextBlock Text="修改时间格式" FontWeight="SemiBold" Margin="0,16,0,6"/>
-                        <ComboBox x:Name="TimeFormatBox" IsEditable="True" Text="yyyyMMdd_HHmmss" SelectionChanged="RuleChanged" LostKeyboardFocus="RuleChanged" AutomationProperties.Name="修改时间格式">
+                        <ComboBox x:Name="TimeFormatBox" IsEditable="True" Text="yyyyMMdd_HHmmss" SelectionChanged="RuleChanged" LostKeyboardFocus="RuleChanged" PreviewMouseWheel="ComboBox_PreviewMouseWheel" AutomationProperties.Name="修改时间格式" AutomationProperties.AutomationId="TimeFormatBox">
                             <ComboBoxItem Content="yyyyMMdd_HHmmss"/><ComboBoxItem Content="yyyy-MM-dd_HH-mm-ss"/><ComboBoxItem Content="yyyyMMdd"/>
                         </ComboBox>
+                        <TextBlock x:Name="TimeHintText" Text="仅 {T} 使用：yyyyMMdd_HHmmss → 20260720_143025" Foreground="{StaticResource MutedBrush}" FontSize="12" Margin="0,5,0,0"/>
 
                         <Border Background="#EFF6FF" BorderBrush="#BFDBFE" BorderThickness="1" CornerRadius="8" Margin="0,20,0,0" Padding="15">
                             <StackPanel>
@@ -79,7 +103,7 @@
                                 <TextBlock Margin="0,0,0,4"><Run Text="{}{P}" FontFamily="Consolas" FontWeight="Bold"/><Run Text="：原名称。abc.txt 中为 abc；文件夹使用完整名称。"/></TextBlock>
                                 <TextBlock Margin="0,0,0,4"><Run Text="{}{S}" FontFamily="Consolas" FontWeight="Bold"/><Run Text="：扩展名，包含句点，例如 .txt；文件夹为空。"/></TextBlock>
                                 <TextBlock Margin="0,0,0,4"><Run Text="{}{T}" FontFamily="Consolas" FontWeight="Bold"/><Run Text="：文件或文件夹的最后修改时间。"/></TextBlock>
-                                <TextBlock Margin="0,0,0,4"><Run Text="{}{N}" FontFamily="Consolas" FontWeight="Bold"/><Run Text="：按名称排序后，从“起始序号”递增。"/></TextBlock>
+                                <TextBlock Margin="0,0,0,4"><Run Text="{}{N}" FontFamily="Consolas" FontWeight="Bold"/><Run Text="：按当前排序后，从“起始序号”递增。"/></TextBlock>
                                 <TextBlock Margin="0,0,0,4"><Run Text="{}{zN}" FontFamily="Consolas" FontWeight="Bold"/><Run Text="：补零序号；起始 1、三位时为 001、002。"/></TextBlock>
                                 <TextBlock Margin="0,0,0,4"><Run Text="{}{0} / {1}" FontFamily="Consolas" FontWeight="Bold"/><Run Text="：直接指定从 0 或 1 开始递增。"/></TextBlock>
                                 <TextBlock><Run Text="{}{z8}" FontFamily="Consolas" FontWeight="Bold"/><Run Text="：从 8 开始并补零，得到 08、09、10……"/></TextBlock>
@@ -108,15 +132,17 @@
                                 <Style TargetType="DataGridColumnHeader"><Setter Property="Background" Value="#F8FAFC"/><Setter Property="Foreground" Value="#536074"/><Setter Property="FontWeight" Value="SemiBold"/><Setter Property="Padding" Value="12,10"/><Setter Property="BorderBrush" Value="{StaticResource LineBrush}"/><Setter Property="BorderThickness" Value="0,0,0,1"/></Style>
                                 <Style TargetType="DataGridRow"><Setter Property="BorderBrush" Value="#E8EDF3"/><Setter Property="BorderThickness" Value="0,0,0,1"/><Setter Property="VerticalContentAlignment" Value="Center"/><Setter Property="Background" Value="White"/><Style.Triggers><Trigger Property="AlternationIndex" Value="1"><Setter Property="Background" Value="#FAFCFE"/></Trigger><Trigger Property="IsMouseOver" Value="True"><Setter Property="Background" Value="#F4F8FF"/></Trigger><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="#EFF6FF"/></Trigger></Style.Triggers></Style>
                                 <Style TargetType="DataGridCell"><Setter Property="Padding" Value="12,7"/><Setter Property="BorderThickness" Value="0"/><Setter Property="VerticalContentAlignment" Value="Center"/><Style.Triggers><Trigger Property="IsSelected" Value="True"><Setter Property="Background" Value="Transparent"/><Setter Property="Foreground" Value="{StaticResource TextBrush}"/></Trigger></Style.Triggers></Style>
-                                <Style x:Key="CellTextStyle" TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+                                <Style x:Key="OriginalNameStyle" TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Foreground" Value="#64748B"/></Style>
+                                <Style x:Key="NewNameStyle" TargetType="TextBlock"><Setter Property="TextTrimming" Value="CharacterEllipsis"/><Setter Property="VerticalAlignment" Value="Center"/><Setter Property="Foreground" Value="#0F4DA8"/><Setter Property="FontWeight" Value="SemiBold"/></Style>
                             </DataGrid.Resources>
                             <DataGrid.Columns>
                                 <DataGridTemplateColumn Header="" Width="46" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><Grid><TextBlock Text="{Binding TypeGlyph}" FontFamily="Segoe Fluent Icons" FontSize="17" Foreground="{Binding TypeBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="{Binding TypeLabel}"/></Grid></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
-                                <DataGridTextColumn Header="原名称" Binding="{Binding OriginalName}" Width="*" IsReadOnly="True" ElementStyle="{StaticResource CellTextStyle}">
-                                    <DataGridTextColumn.CellStyle><Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}"><Setter Property="ToolTip" Value="{Binding OriginalName}"/></Style></DataGridTextColumn.CellStyle>
+                                <DataGridTextColumn Header="原名称（只读）" Binding="{Binding OriginalName}" Width="*" IsReadOnly="True" ElementStyle="{StaticResource OriginalNameStyle}">
+                                    <DataGridTextColumn.CellStyle><Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}"><Setter Property="ToolTip" Value="{Binding OriginalName}"/><Setter Property="Background" Value="#FAFCFE"/></Style></DataGridTextColumn.CellStyle>
                                 </DataGridTextColumn>
-                                <DataGridTextColumn Header="新名称（可编辑）" Binding="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" Width="1.2*" ElementStyle="{StaticResource CellTextStyle}">
-                                    <DataGridTextColumn.CellStyle><Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}"><Setter Property="ToolTip" Value="{Binding NewName}"/></Style></DataGridTextColumn.CellStyle>
+                                <DataGridTemplateColumn Header="" Width="40" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><TextBlock Text="&#xE72A;" FontFamily="Segoe Fluent Icons" Foreground="#94A3B8" HorizontalAlignment="Center" VerticalAlignment="Center"/></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
+                                <DataGridTextColumn Header="新名称（将写入，可编辑）" Binding="{Binding NewName, UpdateSourceTrigger=PropertyChanged}" Width="1.2*" ElementStyle="{StaticResource NewNameStyle}">
+                                    <DataGridTextColumn.CellStyle><Style TargetType="DataGridCell" BasedOn="{StaticResource {x:Type DataGridCell}}"><Setter Property="ToolTip" Value="{Binding NewName}"/><Setter Property="Background" Value="#F4F8FF"/></Style></DataGridTextColumn.CellStyle>
                                 </DataGridTextColumn>
                                 <DataGridTemplateColumn Header="状态" Width="104" IsReadOnly="True"><DataGridTemplateColumn.CellTemplate><DataTemplate><Border Background="{Binding StatusBackground}" CornerRadius="12" Padding="8,4" HorizontalAlignment="Center" VerticalAlignment="Center" ToolTip="{Binding Error}"><StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="{Binding StatusGlyph}" FontFamily="Segoe Fluent Icons" Foreground="{Binding StatusBrush}" Margin="0,0,5,0" VerticalAlignment="Center"/><TextBlock Text="{Binding StatusText}" Foreground="{Binding StatusBrush}" VerticalAlignment="Center"/></StackPanel></Border></DataTemplate></DataGridTemplateColumn.CellTemplate></DataGridTemplateColumn>
                             </DataGrid.Columns>
@@ -135,7 +161,7 @@
         <Border Grid.Row="2" Background="White" BorderBrush="{StaticResource LineBrush}" BorderThickness="0,1,0,0" Padding="24,14">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center"><TextBlock Text="&#xE946;" FontFamily="Segoe Fluent Icons" Foreground="#6D7787" Margin="0,0,7,0"/><TextBlock Text="执行前只生成预览；确认后使用两阶段改名，避免名称互换冲突，并写入可持久回退的历史。" Foreground="{StaticResource MutedBrush}"/></StackPanel>
-                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Style="{StaticResource SecondaryButton}" Content="重新生成预览" Margin="0,0,10,0" Click="Refresh_Click" ToolTip="重新读取磁盘并生成预览（F5）"/><Button x:Name="ExecuteButton" Style="{StaticResource PrimaryButton}" Content="确认批量重命名" Click="Execute_Click" IsEnabled="False" ToolTip="执行有效预览（Ctrl+Enter）"/></StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right"><Button Style="{StaticResource SecondaryButton}" Content="重新生成预览" Margin="0,0,10,0" Click="Refresh_Click" ToolTip="重新读取磁盘并生成预览（F5）"/><Button x:Name="ExecuteButton" Style="{StaticResource PrimaryButton}" Content="打开最终预览" Click="Execute_Click" IsEnabled="False" ToolTip="先查看最终清单，再确认重命名（Ctrl+Enter）" AutomationProperties.Name="打开最终预览" AutomationProperties.AutomationId="FinalPreviewButton"/></StackPanel>
             </Grid>
         </Border>
     </Grid>

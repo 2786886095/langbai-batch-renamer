@@ -33,25 +33,27 @@ public static partial class RenamePlanner
             }
         }
 
-        var ordered = paths
+        var candidates = paths
             .Where(path => !string.IsNullOrWhiteSpace(path))
             .Select(Path.GetFullPath)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Where(path => File.Exists(path) || Directory.Exists(path))
-            .OrderBy(path => Path.GetFileName(path), NaturalNameComparer.Instance)
-            .ThenBy(path => path, StringComparer.CurrentCultureIgnoreCase)
+            .Select(CreateCandidate)
             .ToList();
+
+        var ordered = SortCandidates(candidates, options).ToList();
 
         var result = new List<RenamePlanItem>(ordered.Count);
         for (var index = 0; index < ordered.Count; index++)
         {
-            var path = ordered[index];
-            var isDirectory = Directory.Exists(path);
-            var originalName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var candidate = ordered[index];
+            var path = candidate.Path;
+            var isDirectory = candidate.IsDirectory;
+            var originalName = candidate.Name;
             var extension = isDirectory ? string.Empty : Path.GetExtension(originalName);
             var prefix = isDirectory ? originalName : Path.GetFileNameWithoutExtension(originalName);
             var changedPrefix = ApplySearch(prefix, options, searchRegex);
-            var lastWrite = isDirectory ? Directory.GetLastWriteTime(path) : File.GetLastWriteTime(path);
+            var lastWrite = candidate.LastWriteTime;
             var generated = ExpandTemplate(options.Template, changedPrefix, extension, lastWrite, index, options);
 
             var item = new RenamePlanItem
@@ -60,6 +62,8 @@ public static partial class RenamePlanner
                 OriginalName = originalName,
                 IsDirectory = isDirectory,
                 LastWriteTime = lastWrite,
+                Size = candidate.Size,
+                TypeKey = candidate.TypeKey,
                 SuggestedName = generated,
                 NewName = generated
             };
@@ -68,6 +72,41 @@ public static partial class RenamePlanner
 
         RenameValidator.Validate(result);
         return result;
+    }
+
+    private static Candidate CreateCandidate(string path)
+    {
+        var isDirectory = Directory.Exists(path);
+        var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        var extension = isDirectory ? string.Empty : Path.GetExtension(name);
+        return new Candidate(
+            path,
+            name,
+            isDirectory,
+            isDirectory ? Directory.GetLastWriteTime(path) : File.GetLastWriteTime(path),
+            isDirectory ? 0 : new FileInfo(path).Length,
+            isDirectory ? "0|文件夹" : $"1|{extension.ToLowerInvariant()}");
+    }
+
+    private static IOrderedEnumerable<Candidate> SortCandidates(IEnumerable<Candidate> source, RenameOptions options)
+    {
+        var nameComparer = NaturalNameComparer.Instance;
+        IOrderedEnumerable<Candidate> ordered = (options.SortBy, options.SortDescending) switch
+        {
+            (RenameSortBy.Name, false) => source.OrderBy(item => item.Name, nameComparer),
+            (RenameSortBy.Name, true) => source.OrderByDescending(item => item.Name, nameComparer),
+            (RenameSortBy.ModifiedTime, false) => source.OrderBy(item => item.LastWriteTime),
+            (RenameSortBy.ModifiedTime, true) => source.OrderByDescending(item => item.LastWriteTime),
+            (RenameSortBy.Size, false) => source.OrderBy(item => item.Size),
+            (RenameSortBy.Size, true) => source.OrderByDescending(item => item.Size),
+            (RenameSortBy.Type, false) => source.OrderBy(item => item.TypeKey, StringComparer.CurrentCultureIgnoreCase),
+            (RenameSortBy.Type, true) => source.OrderByDescending(item => item.TypeKey, StringComparer.CurrentCultureIgnoreCase),
+            _ => source.OrderBy(item => item.Name, nameComparer)
+        };
+
+        return options.SortBy == RenameSortBy.Name
+            ? ordered.ThenBy(item => item.Path, StringComparer.CurrentCultureIgnoreCase)
+            : ordered.ThenBy(item => item.Name, nameComparer).ThenBy(item => item.Path, StringComparer.CurrentCultureIgnoreCase);
     }
 
     private static string ApplySearch(string prefix, RenameOptions options, Regex? searchRegex)
@@ -118,6 +157,14 @@ public static partial class RenamePlanner
 
     [GeneratedRegex(@"\{(P|S|T|N|zN|\d+|z\d+)\}", RegexOptions.CultureInvariant)]
     private static partial Regex TokenRegex();
+
+    private sealed record Candidate(
+        string Path,
+        string Name,
+        bool IsDirectory,
+        DateTime LastWriteTime,
+        long Size,
+        string TypeKey);
 
     internal static string? ValidateName(string name)
     {

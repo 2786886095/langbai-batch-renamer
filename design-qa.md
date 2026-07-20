@@ -1,52 +1,55 @@
 # Design QA
 
-- source visual truth path: `D:\qq\Tencent Files\2786886095\nt_qq\nt_data\Pic\2026-07\Ori\949242da4ed0640c7eddd88b89a049af.jpg`
-- implementation screenshot path: `F:\AI\agent\codex\windows-batch-renamer\artifacts\ui-installed-aligned-final.png`
-- viewport: 1180 x 760 desktop window; minimum-size check at 980 x 680
-- state: three naturally sorted sample items (two files and one folder), plus a populated rename-preview state
-- full-view comparison evidence: `F:\AI\agent\codex\windows-batch-renamer\artifacts\design-qa-installed-alignment-final.png`
-- focused region evidence: `artifacts\ui-preview-aligned.png`, `artifacts\ui-preview-aligned-minimum.png`, and `artifacts\ui-history-v2.png`; these were needed to check icon/text baselines, row separators, long-name truncation, success states, the enabled primary action, and history empty state.
+- source visual truth paths: `image-1.jpg` through `image-5.png` under `C:\Users\浪白\.codex\attachments\4d93550e-ae38-4e88-97c6-62bb213d7c0e\`
+- installed implementation: `LangBai.BatchRename` version `1.1.0.0` (x64)
+- main screenshot: `artifacts\ui-v1.1-installed-main.png`
+- final-preview screenshot: `artifacts\ui-v1.1-installed-final-preview.png`
+- minimum-size screenshot: `artifacts\ui-v1.1-minimum.png` at 980 x 680
+- combined main comparison: `artifacts\design-qa-v1.1-installed-main.png`
+- combined final-preview comparison: `artifacts\design-qa-v1.1-installed-final-preview.png`
 
 ## Findings
 
-No actionable P0, P1, or P2 findings remain.
+No actionable P0, P1, or P2 visual findings remain in the checked states.
 
-- Typography: native Segoe UI Variable/Microsoft YaHei UI is crisp and readable; Consolas is limited to rename tokens. Weight and size hierarchy remain clear at both checked window sizes.
-- Spacing and layout: the desktop two-pane adaptation preserves the reference's rule-first workflow and detailed annotations while using a compact 4/8-based rhythm. Fixed header/footer controls remain visible at minimum size.
-- Colors and tokens: neutral slate surfaces, blue primary actions, green valid states, and red error states are semantic and text/icon reinforced. No meaning depends on color alone.
-- Image and icon quality: the interface has no decorative imagery to reproduce. Visible controls use one native Segoe Fluent icon family; no emoji or placeholder art is used.
-- Copy and content: all MT-style token explanations are retained and expanded for desktop use, including file/folder behavior, `{P}`, `{S}`, `{T}`, `{N}`, `{zN}`, `{0}`, `{1}`, `{z8}`, search scope, preview safety, and persistent undo.
-- Interaction and accessibility: visible labels, keyboard focus styles, UI Automation names, Ctrl+O, Ctrl+Shift+O, F5, Ctrl+H, and Ctrl+Enter are present. The primary action is disabled until a valid changed plan exists.
-- Intentional adaptation: the source is a mobile modal while the target is a Windows desktop utility. The implementation intentionally uses a two-pane rule/preview layout instead of copying the mobile viewport or Android navigation.
+- Saved schemes: the empty control states that no scheme exists, while Save and Delete remain adjacent and subordinate to the rule field. Save status explains local-only persistence and overwrite behavior.
+- Sorting: name/date/size/type and reverse controls are grouped as one setting. The helper line changes with the selected strategy and documents folder-size behavior.
+- Original/new distinction: original names are muted and read-only, proposed names use blue semibold text, and a directional arrow connects each pair. Status remains icon + text + color.
+- Final preview: the separate confirmation window clearly states that disk changes happen only after confirmation, preserves visible Back and Copy actions, and keeps one blue primary action.
+- Complex-field guidance: start number, zero-padding width, and time format have persistent examples rather than tooltip-only help.
+- Minimum size: long names use ellipsis and tooltips; the preview status and primary action remain visible at 980 x 680.
+- Iconography: all action and file-type glyphs remain in the Segoe Fluent family and use the established blue identity.
+
+## Interaction Evidence
+
+- `scripts\Test-UiInteractions.ps1` sends a real mouse-wheel event to the focused time-format combo box and verifies that its value does not change.
+- The same test opens the real right-click edit menu, finds Cut, Copy, Paste, and Select All, invokes Paste, and verifies the textbox value.
+- `scripts\Test-ExplorerCommand.ps1` invokes the packaged `IExplorerCommand` with two files and one folder and verifies the selection summary received by the installed app.
+- `scripts\Test-FinalPreviewFlow.ps1` drives the installed final-preview window, confirms the action, verifies two files and one folder were renamed, and verifies that undo history was persisted.
+- Core tests cover local preset save/overwrite/delete, all four sort strategies, reverse ordering, preview planning, collisions, execution, persistence, and undo.
 
 ## Comparison History
 
-1. Earlier P2: long names were hard-clipped at the 980 x 680 minimum window size.
-   - Fix: added character ellipsis and full-name tooltips to original and target-name cells.
-   - Post-fix evidence: `artifacts\ui-minimum-v2.png`.
-2. Earlier P2: the empty history screen was a large undifferentiated blank surface.
-   - Fix: added a centered native-icon empty state with recovery-oriented copy.
-   - Post-fix evidence: `artifacts\ui-history-v2.png`.
-3. Earlier P2: the preview table's black horizontal rules and gray unused background felt visually disconnected from the rest of the interface.
-   - Fix: replaced the default grid treatment with subtle `#E8EDF3` separators, white unused space, quiet alternating rows, and light-blue hover/selection states.
-   - Post-fix evidence: `artifacts\ui-preview-soft.png` and `artifacts\ui-preview-soft-minimum.png`.
-4. Earlier P2: app identity icons used inconsistent generated/source treatments.
-   - Fix: adopted the user-confirmed 150 x 150 blue source image as the single master for the WPF header, executable, MSIX assets, installer, and Explorer command; action glyphs use the same primary blue while semantic success/error colors remain distinct.
-   - Post-fix evidence: `artifacts\ui-installed-final.png` and `artifacts\explorer-context-menu-final-icon.png`.
-5. Earlier P2: file/folder glyphs appeared above the filename baseline, status badges were offset within their cells, and native `DataGrid` rules rendered nearly black under the user's display theme.
-   - Fix: replaced native gridlines with explicit `#E8EDF3` row borders, made the first column a centered icon-only column, centered the status badge, and matched 12 px header/cell padding.
-   - Post-fix evidence: `artifacts\design-qa-installed-alignment-final.png`, `artifacts\ui-installed-aligned-final.png`, and `artifacts\ui-preview-aligned-minimum.png`.
+1. Earlier P2: long names hard-clipped at minimum size. Fixed with ellipsis and full-name tooltips.
+2. Earlier P2: preview gridlines rendered nearly black. Fixed with explicit `#E8EDF3` row borders and no native gridlines.
+3. Earlier P2: type glyphs and status badges were vertically offset. Fixed with centered row content and matched padding.
+4. Earlier P2: original and proposed names had insufficient visual distinction. Fixed with read-only gray, editable blue, explicit headers, and arrows.
+5. Earlier P2: confirmation used a generic message box. Fixed with a dedicated, inspectable final-preview table based on the MT reference.
+6. Earlier P2: complex numeric/time settings depended on terse labels and tooltips. Fixed with persistent dynamic examples.
 
 ## Residual Test Gaps
 
-- Dark mode is not offered in version 1.0, so no dark-theme claim is made.
-- Windows text scaling above the current system setting was not separately captured; the window has minimum dimensions and scrollable rule content to reduce clipping risk.
+- Dark mode is not offered in version 1.1, so no dark-theme claim is made.
+- Windows text scaling above the current system setting was not separately captured; the rule rail scrolls and the window enforces minimum dimensions.
+- Screenshot review cannot establish full screen-reader compatibility; UI Automation names and keyboard paths were checked, but Narrator was not run end to end.
 
 ## Implementation Checklist
 
-- [x] Reference and implementation viewed in one combined comparison image.
-- [x] Default, populated-valid, minimum-size, and history-empty states rendered.
-- [x] Fonts, spacing, colors, icons, copy, interaction states, accessibility, and polish reviewed.
-- [x] Build completes with zero warnings and zero errors.
+- [x] Reference and installed implementation viewed in combined comparison images.
+- [x] Default, populated-valid, minimum-size, final-preview, and interaction states checked.
+- [x] Fonts, spacing, colors, icons, copy, focusability, truncation, and action hierarchy reviewed.
+- [x] Build completed with zero warnings and zero errors.
+- [x] Unit/integration tests passed 8/8.
+- [x] Installed package, Explorer selection transfer, mouse-wheel behavior, right-click paste, and final confirmation flow verified.
 
 final result: passed

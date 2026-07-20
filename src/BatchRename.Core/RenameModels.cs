@@ -2,6 +2,14 @@ using System.Text.Json.Serialization;
 
 namespace BatchRename.Core;
 
+public enum RenameSortBy
+{
+    Name,
+    ModifiedTime,
+    Size,
+    Type
+}
+
 public sealed class RenameOptions
 {
     public string Template { get; set; } = "{P}{S}";
@@ -11,6 +19,27 @@ public sealed class RenameOptions
     public int StartNumber { get; set; } = 1;
     public int PaddingWidth { get; set; } = 3;
     public string TimeFormat { get; set; } = "yyyyMMdd_HHmmss";
+    public RenameSortBy SortBy { get; set; } = RenameSortBy.Name;
+    public bool SortDescending { get; set; }
+
+    public RenameOptions Clone() => new()
+    {
+        Template = Template,
+        SearchText = SearchText,
+        ReplaceText = ReplaceText,
+        UseRegex = UseRegex,
+        StartNumber = StartNumber,
+        PaddingWidth = PaddingWidth,
+        TimeFormat = TimeFormat,
+        SortBy = SortBy,
+        SortDescending = SortDescending
+    };
+}
+
+public sealed class RenamePreset
+{
+    public string Name { get; set; } = string.Empty;
+    public RenameOptions Options { get; set; } = new();
 }
 
 public sealed class RenamePlanItem
@@ -19,6 +48,8 @@ public sealed class RenamePlanItem
     public required string OriginalName { get; init; }
     public required bool IsDirectory { get; init; }
     public required DateTime LastWriteTime { get; init; }
+    public long Size { get; init; }
+    public string TypeKey { get; init; } = string.Empty;
     public required string SuggestedName { get; init; }
     public string NewName { get; set; } = string.Empty;
     public bool IsManual { get; set; }
