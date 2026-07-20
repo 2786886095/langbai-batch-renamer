@@ -42,8 +42,8 @@ Do not rely on color alone; every status includes an icon and text.
 ## Layout and density
 
 - Spacing scale: 4, 8, 12, 16, 20, 24, 32.
-- Rule rail: 360-380 px. Preview fills remaining width.
-- Panel radius: 10 px. Input/button radius: 6 px. Status pill radius: 12 px.
+- Rule rail: 400-420 px. Preview fills remaining width.
+- Panel radius: 10 px. Compact input/combo radius: 9 px and height: 34 px. Button radius: 8 px. Status pill radius: 12 px.
 - Data rows: 42-46 px. Header: 38-42 px. Keep filenames scannable.
 - Use 1 px neutral borders. Shadows are optional and very subtle; never stack heavy card shadows.
 
@@ -51,12 +51,14 @@ Do not rely on color alone; every status includes an icon and text.
 
 - The default `{P}{S}` rule performs no changes.
 - Rule edits update preview immediately; manual target-name edits are explicitly labelled.
-- Saved naming schemes include rule, replacement, sequence, time-format, and sort settings; they persist only in local app data.
+- Saved naming schemes live directly in the editable naming-format dropdown; Save and Delete remain adjacent to the field. Schemes include rule, replacement, sequence, time-format, and sort settings and persist only in local app data.
 - Sort choices are name, modified time, file size, and type, with an explicit descending toggle.
 - Invalid input appears inline or in the persistent validation bar before submission.
 - Execute stays disabled while any item is invalid or unchanged.
 - The main action opens a separate final preview; disk changes are available only from that final confirmation window.
 - Closed combo boxes forward mouse-wheel input to the rule panel instead of changing values.
+- The rule rail scrolls 96 px per wheel notch; scheme dropdown items expand to at least 350 px and up to 420 px high.
+- Settings exposes automatic/manual update checks. About exposes the current version, repository, and Releases links. Update downloads require SHA-256 verification before installation.
 - Every editable text field exposes native keyboard shortcuts plus a Chinese Cut/Copy/Paste/Select All context menu.
 - Keyboard access: Ctrl+O add files, Ctrl+Shift+O add folders, F5 refresh, Ctrl+H history, Ctrl+Enter execute.
 - All actions have visible focus and descriptive tooltips.

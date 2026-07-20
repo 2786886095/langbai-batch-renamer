@@ -2,11 +2,12 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\BatchRename.Core\BatchRename.Core.csproj" />
+    <ProjectReference Include="..\..\src\BatchRename.App\BatchRename.App.csproj" />
   </ItemGroup>
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>net8.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>

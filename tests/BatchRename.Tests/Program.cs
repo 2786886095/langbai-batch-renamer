@@ -1,4 +1,9 @@
 using BatchRename.Core;
+using BatchRename.App;
+using System.Net;
+using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 
 var tests = new List<(string Name, Action Run)>
 {
@@ -19,6 +24,8 @@ var tests = new List<(string Name, Action Run)>
     ,("高复杂度正则会超时终止", TestRegexTimeout)
     ,("一万项预览保持完整", TestLargeBatchPlanning)
     ,("总路径超过 260 字符仍可执行并回退", TestLongPathExecuteAndUndo)
+    ,("设置可持久保存启动更新开关", TestSettingsPersistence)
+    ,("更新检查、下载与 SHA-256 校验", TestUpdateCheckAndDownload)
 };
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BATCH_RENAME_UNC_TEST_ROOT")))
     tests.Add(("UNC 网络共享执行并回退", TestUncExecuteAndUndo));
@@ -337,6 +344,35 @@ static void TestUncExecuteAndUndo()
     }
 }
 
+static void TestSettingsPersistence()
+{
+    using var fixture = new TempFixture();
+    var previous = Environment.GetEnvironmentVariable("BATCH_RENAME_DATA_DIR");
+    try
+    {
+        Environment.SetEnvironmentVariable("BATCH_RENAME_DATA_DIR", fixture.Root);
+        var store = new AppSettingsStore();
+        store.Save(new AppSettings { CheckUpdatesOnStartup = false });
+        True(!new AppSettingsStore().Load().CheckUpdatesOnStartup);
+    }
+    finally { Environment.SetEnvironmentVariable("BATCH_RENAME_DATA_DIR", previous); }
+}
+
+static void TestUpdateCheckAndDownload()
+{
+    var payload = Encoding.UTF8.GetBytes("verified-installer");
+    var digest = Convert.ToHexString(SHA256.HashData(payload));
+    var json = $$"""
+        {"tag_name":"v9.0.0","name":"测试更新","body":"更新说明","html_url":"https://example.invalid/release","assets":[{"name":"BatchRename-Setup-9.0.0-x64.exe","browser_download_url":"https://example.invalid/setup.exe","size":{{payload.Length}},"digest":"sha256:{{digest}}"}]}
+        """;
+    var service = new UpdateService(new FakeUpdateHandler(json, payload));
+    var release = service.CheckAsync().GetAwaiter().GetResult() ?? throw new InvalidOperationException("Expected an update.");
+    Equal(new Version(9, 0, 0), release.Version);
+    var path = service.DownloadAsync(release, new Progress<double>()).GetAwaiter().GetResult();
+    try { Equal("verified-installer", System.IO.File.ReadAllText(path)); }
+    finally { System.IO.File.Delete(path); }
+}
+
 static void True(bool condition)
 {
     if (!condition) throw new InvalidOperationException("Expected true.");
@@ -374,5 +410,20 @@ sealed class TempFixture : IDisposable
     public void Dispose()
     {
         if (System.IO.Directory.Exists(Root)) System.IO.Directory.Delete(Root, true);
+    }
+}
+
+sealed class FakeUpdateHandler(string releaseJson, byte[] payload) : HttpMessageHandler
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var isDownload = request.RequestUri?.Host == "example.invalid";
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = isDownload
+                ? new ByteArrayContent(payload)
+                : new StringContent(releaseJson, Encoding.UTF8, "application/json")
+        };
+        return Task.FromResult(response);
     }
 }

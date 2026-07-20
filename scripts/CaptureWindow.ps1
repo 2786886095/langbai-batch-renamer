@@ -6,7 +6,9 @@ param(
     [int]$Height = 0,
     [string]$Template = '',
     [switch]$OpenHistory,
-    [switch]$OpenFinalPreview
+    [switch]$OpenFinalPreview,
+    [switch]$OpenSettings,
+    [switch]$OpenAbout
 )
 
 Add-Type -AssemblyName System.Drawing
@@ -118,6 +120,38 @@ try
             }
         }
         if ($captureHandle -eq $captureProcess.MainWindowHandle) { throw 'Final preview window did not become visible.' }
+    }
+    if ($OpenSettings -or $OpenAbout)
+    {
+        Start-Sleep -Milliseconds 400
+        $windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($captureProcess.MainWindowHandle)
+        $buttonId = if ($OpenSettings) { 'SettingsButton' } else { 'AboutButton' }
+        $buttonCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+            $buttonId)
+        $button = $windowElement.FindFirst([System.Windows.Automation.TreeScope]::Subtree, $buttonCondition)
+        if (-not $button) { throw "$buttonId automation element was not found." }
+        $invokePattern = $button.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+        $invokePattern.Invoke()
+        Start-Sleep -Milliseconds 600
+        $processCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+            $captureProcess.Id)
+        $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            $processCondition)
+        for ($index = 0; $index -lt $windows.Count; $index++)
+        {
+            $candidate = $windows.Item($index)
+            if ($candidate.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window -and
+                $candidate.Current.NativeWindowHandle -ne 0 -and
+                $candidate.Current.NativeWindowHandle -ne $captureProcess.MainWindowHandle)
+            {
+                $captureHandle = [IntPtr]$candidate.Current.NativeWindowHandle
+                break
+            }
+        }
+        if ($captureHandle -eq $captureProcess.MainWindowHandle) { throw "$buttonId window did not become visible." }
     }
     Start-Sleep -Milliseconds 600
     $rect = New-Object WindowCaptureNative+RECT

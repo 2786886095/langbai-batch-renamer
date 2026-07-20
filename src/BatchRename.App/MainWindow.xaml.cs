@@ -1,11 +1,15 @@
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
 using System.ComponentModel;
 using System.IO;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Threading;
 using BatchRename.Core;
 using Microsoft.Win32;
 
@@ -25,20 +29,37 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private readonly List<string> _paths = [];
     private readonly HistoryStore _historyStore = new();
     private readonly PresetStore _presetStore = new();
+    private readonly AppSettingsStore _settingsStore = new();
+    private readonly UpdateService _updateService = new();
+    private readonly DispatcherTimer _previewTimer;
     private bool _isLoaded;
     private bool _isApplyingPreset;
     private string _lastRuleError = string.Empty;
+    private int _previewGeneration;
+    private bool _isCheckingForUpdates;
 
     public MainWindow(IReadOnlyList<string> initialPaths)
     {
         InitializeComponent();
+        TemplateBox.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler(RuleChanged));
+        _previewTimer = new DispatcherTimer(DispatcherPriority.Background) { Interval = TimeSpan.FromMilliseconds(180) };
+        _previewTimer.Tick += async (_, _) => { _previewTimer.Stop(); await RegeneratePreviewNowAsync(); };
         DataContext = this;
         AddPaths(initialPaths);
         LoadPresets();
-        Loaded += (_, _) => { _isLoaded = true; RegeneratePreview(); };
+        Loaded += async (_, _) =>
+        {
+            _isLoaded = true;
+            await RegeneratePreviewNowAsync();
+            if (_settingsStore.Load().CheckUpdatesOnStartup)
+            {
+                await Task.Delay(600);
+                await CheckForUpdatesAsync(false);
+            }
+        };
     }
 
-    public ObservableCollection<RenameRowViewModel> Rows { get; } = [];
+    public BulkObservableCollection<RenameRowViewModel> Rows { get; } = [];
     public ObservableCollection<RenamePreset> Presets { get; } = [];
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -79,22 +100,40 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void RegeneratePreview()
     {
         if (!_isLoaded) return;
+        _previewGeneration++;
+        ExecuteButton.IsEnabled = false;
+        _previewTimer.Stop();
+        _previewTimer.Start();
+    }
+
+    private async Task RegeneratePreviewNowAsync()
+    {
+        if (!_isLoaded) return;
+        _previewTimer.Stop();
+        var generation = ++_previewGeneration;
         UpdateHelperText();
         var options = ReadOptions();
         if (options is null) { SetRuleError(_lastRuleError); return; }
+        var paths = _paths.ToArray();
         try
         {
-            var plan = RenamePlanner.Build(_paths, options);
-            Rows.Clear();
+            var plan = await Task.Run(() => RenamePlanner.Build(paths, options));
+            if (generation != _previewGeneration) return;
+            var rows = new List<RenameRowViewModel>(plan.Count);
             foreach (var item in plan)
             {
                 var row = new RenameRowViewModel(item);
                 row.PropertyChanged += Row_PropertyChanged;
-                Rows.Add(row);
+                rows.Add(row);
             }
+            Rows.ReplaceAll(rows);
             ValidateRows();
         }
-        catch (RenameValidationException ex) { SetRuleError(ex.Message); }
+        catch (RenameValidationException ex) { if (generation == _previewGeneration) SetRuleError(ex.Message); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            if (generation == _previewGeneration) SetRuleError($"暂时无法读取所选项目：{ex.Message}");
+        }
         RefreshSummary();
     }
 
@@ -147,9 +186,9 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void RuleChanged(object sender, EventArgs e)
     {
         if (!_isLoaded || _isApplyingPreset) return;
-        PresetStatusText.Text = PresetBox.SelectedItem is RenamePreset preset
+        PresetStatusText.Text = TemplateBox.SelectedItem is RenamePreset preset
             ? $"当前设置已修改；点击“保存”可覆盖“{preset.Name}”。"
-            : "当前设置尚未保存为本地方案。";
+            : "当前格式尚未保存；点击“保存”可加入下拉列表。";
         RegeneratePreview();
     }
     private void Row_PropertyChanged(object? sender, PropertyChangedEventArgs e) { if (e.PropertyName == nameof(RenameRowViewModel.NewName)) ValidateRows(); }
@@ -157,11 +196,48 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     private void InsertToken_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not Button { Tag: string token }) return;
-        var caret = TemplateBox.CaretIndex;
-        TemplateBox.Text = TemplateBox.Text.Insert(caret, token);
-        TemplateBox.CaretIndex = caret + token.Length;
-        TemplateBox.Focus();
+        TemplateBox.ApplyTemplate();
+        if (TemplateBox.Template.FindName("PART_EditableTextBox", TemplateBox) is TextBox editor)
+        {
+            var insertionPoint = editor.SelectionStart;
+            editor.SelectedText = token;
+            editor.CaretIndex = insertionPoint + token.Length;
+            editor.Focus();
+        }
+        else
+        {
+            TemplateBox.Text += token;
+            TemplateBox.Focus();
+        }
     }
+
+    private void TemplateBox_Loaded(object sender, RoutedEventArgs e)
+    {
+        TemplateBox.ApplyTemplate();
+        if (TemplateBox.Template.FindName("PART_EditableTextBox", TemplateBox) is not TextBox editor) return;
+        editor.ContextMenu = new ContextMenu
+        {
+            Items =
+            {
+                CreateEditMenuItem("撤销", ApplicationCommands.Undo, editor, "Ctrl+Z"),
+                new Separator(),
+                CreateEditMenuItem("剪切", ApplicationCommands.Cut, editor, "Ctrl+X"),
+                CreateEditMenuItem("复制", ApplicationCommands.Copy, editor, "Ctrl+C"),
+                CreateEditMenuItem("粘贴", ApplicationCommands.Paste, editor, "Ctrl+V"),
+                CreateEditMenuItem("删除", ApplicationCommands.Delete, editor),
+                new Separator(),
+                CreateEditMenuItem("全选", ApplicationCommands.SelectAll, editor, "Ctrl+A")
+            }
+        };
+    }
+
+    private static MenuItem CreateEditMenuItem(string header, ICommand command, TextBox target, string gesture = "") => new()
+    {
+        Header = header,
+        Command = command,
+        CommandTarget = target,
+        InputGestureText = gesture
+    };
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
     {
@@ -176,7 +252,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     }
 
     private void Clear_Click(object sender, RoutedEventArgs e) { _paths.Clear(); RegeneratePreview(); }
-    private void Refresh_Click(object sender, RoutedEventArgs e) => RegeneratePreview();
+    private async void Refresh_Click(object sender, RoutedEventArgs e) => await RegeneratePreviewNowAsync();
 
     private void AddFilesCommand_Executed(object sender, ExecutedRoutedEventArgs e) => AddFiles_Click(sender, e);
     private void AddFoldersCommand_Executed(object sender, ExecutedRoutedEventArgs e) => AddFolder_Click(sender, e);
@@ -218,6 +294,31 @@ public partial class MainWindow : Window, INotifyPropertyChanged
         RegeneratePreview();
     }
 
+    private void Settings_Click(object sender, RoutedEventArgs e) => new SettingsWindow(this) { Owner = this }.ShowDialog();
+    private void About_Click(object sender, RoutedEventArgs e) => new AboutWindow { Owner = this }.ShowDialog();
+
+    public async Task CheckForUpdatesAsync(bool userInitiated)
+    {
+        if (_isCheckingForUpdates) return;
+        _isCheckingForUpdates = true;
+        try
+        {
+            var release = await _updateService.CheckAsync();
+            var owner = Application.Current.Windows.OfType<Window>().FirstOrDefault(window => window.IsActive) ?? this;
+            if (release is null)
+            {
+                if (userInitiated) MessageBox.Show(owner, $"当前已是最新版本 {UpdateService.CurrentVersion.ToString(3)}。", "检查更新", MessageBoxButton.OK, MessageBoxImage.Information);
+                return;
+            }
+            new UpdateWindow(release, _updateService) { Owner = owner }.ShowDialog();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or UnauthorizedAccessException)
+        {
+            if (userInitiated) MessageBox.Show(this, $"暂时无法连接 GitHub 检查更新。\n\n{ex.Message}", "检查更新失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
+        finally { _isCheckingForUpdates = false; }
+    }
+
     private void Window_DragOver(object sender, DragEventArgs e)
     {
         e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;
@@ -228,21 +329,22 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void LoadPresets(string? selectName = null)
     {
+        var currentTemplate = string.IsNullOrWhiteSpace(TemplateBox.Text) ? "{P}{S}" : TemplateBox.Text;
         _isApplyingPreset = true;
         Presets.Clear();
         foreach (var preset in _presetStore.Load()) Presets.Add(preset);
-        PresetBox.SelectedItem = selectName is null
+        TemplateBox.SelectedItem = selectName is null
             ? null
             : Presets.FirstOrDefault(item => string.Equals(item.Name, selectName, StringComparison.CurrentCultureIgnoreCase));
-        if (PresetBox.SelectedItem is null) PresetBox.Text = Presets.Count == 0 ? "尚无已保存方案" : "选择已保存方案";
-        DeletePresetButton.IsEnabled = PresetBox.SelectedItem is RenamePreset;
+        TemplateBox.Text = TemplateBox.SelectedItem is RenamePreset selected ? selected.Options.Template : currentTemplate;
+        DeletePresetButton.IsEnabled = TemplateBox.SelectedItem is RenamePreset;
         _isApplyingPreset = false;
     }
 
-    private void PresetBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void TemplateBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
-        DeletePresetButton.IsEnabled = PresetBox.SelectedItem is RenamePreset;
-        if (!_isLoaded || _isApplyingPreset || PresetBox.SelectedItem is not RenamePreset preset) return;
+        DeletePresetButton.IsEnabled = TemplateBox.SelectedItem is RenamePreset;
+        if (!_isLoaded || _isApplyingPreset || TemplateBox.SelectedItem is not RenamePreset preset) return;
 
         _isApplyingPreset = true;
         var options = preset.Options;
@@ -265,7 +367,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         var options = ReadOptions();
         if (options is null) { SetRuleError(_lastRuleError); return; }
-        var suggestedName = PresetBox.SelectedItem is RenamePreset selected ? selected.Name : "我的命名方案";
+        var suggestedName = TemplateBox.SelectedItem is RenamePreset selected ? selected.Name : "我的命名方案";
         var dialog = new SavePresetWindow(suggestedName) { Owner = this };
         if (dialog.ShowDialog() != true) return;
 
@@ -290,7 +392,7 @@ public partial class MainWindow : Window, INotifyPropertyChanged
 
     private void DeletePreset_Click(object sender, RoutedEventArgs e)
     {
-        if (PresetBox.SelectedItem is not RenamePreset preset) return;
+        if (TemplateBox.SelectedItem is not RenamePreset preset) return;
         if (MessageBox.Show(this, $"确定删除本机方案“{preset.Name}”吗？此操作不会删除文件。", "删除命名方案", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
             return;
         try
@@ -312,12 +414,21 @@ public partial class MainWindow : Window, INotifyPropertyChanged
     {
         if (sender is ComboBox { IsDropDownOpen: true }) return;
         e.Handled = true;
-        var lines = Math.Max(1, SystemParameters.WheelScrollLines);
-        for (var index = 0; index < lines; index++)
-        {
-            if (e.Delta > 0) RuleScrollViewer.LineUp();
-            else RuleScrollViewer.LineDown();
-        }
+        ScrollRulePanel(e.Delta);
+    }
+
+    private void RuleScrollViewer_PreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (e.Handled) return;
+        e.Handled = true;
+        ScrollRulePanel(e.Delta);
+    }
+
+    private void ScrollRulePanel(int wheelDelta)
+    {
+        var notches = Math.Max(1, Math.Abs(wheelDelta) / 120.0);
+        var distance = 96 * notches;
+        RuleScrollViewer.ScrollToVerticalOffset(RuleScrollViewer.VerticalOffset + (wheelDelta > 0 ? -distance : distance));
     }
 
     private void UpdateHelperText()
@@ -400,4 +511,17 @@ public sealed class RenameRowViewModel : INotifyPropertyChanged
         OnPropertyChanged(nameof(Error)); OnPropertyChanged(nameof(StatusText)); OnPropertyChanged(nameof(StatusGlyph)); OnPropertyChanged(nameof(StatusBrush)); OnPropertyChanged(nameof(StatusBackground));
     }
     private void OnPropertyChanged([CallerMemberName] string? name = null) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
+}
+
+public sealed class BulkObservableCollection<T> : ObservableCollection<T>
+{
+    public void ReplaceAll(IEnumerable<T> items)
+    {
+        CheckReentrancy();
+        Items.Clear();
+        foreach (var item in items) Items.Add(item);
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+    }
 }
