@@ -23,6 +23,7 @@ public partial class SavePresetWindow : Window
         if (string.IsNullOrWhiteSpace(PresetName))
         {
             ErrorText.Text = "请输入方案名称。";
+            ErrorText.Visibility = Visibility.Visible;
             NameBox.Focus();
             return;
         }

@@ -67,7 +67,7 @@
                                     </DataTemplate>
                                 </ComboBox.ItemTemplate>
                             </ComboBox>
-                            <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Height="34" MinHeight="34" Padding="13,4" Content="保存" Click="SavePreset_Click" ToolTip="将当前全部设置保存为方案"/>
+                            <Button Grid.Column="2" Style="{StaticResource SecondaryButton}" Height="34" MinHeight="34" Padding="13,4" Content="保存" Click="SavePreset_Click" ToolTip="将当前全部设置保存为方案" AutomationProperties.Name="保存命名方案" AutomationProperties.AutomationId="SavePresetButton"/>
                             <Button x:Name="DeletePresetButton" Grid.Column="4" Style="{StaticResource SecondaryButton}" Height="34" MinHeight="34" Padding="13,4" Content="删除" Click="DeletePreset_Click" IsEnabled="False" ToolTip="删除当前载入的方案"/>
                         </Grid>
                         <TextBlock x:Name="PresetStatusText" Text="可直接编辑格式；保存的方案会出现在下拉列表中。" Style="{StaticResource FieldHint}"/>

@@ -5,6 +5,7 @@ param(
     [int]$Width = 0,
     [int]$Height = 0,
     [string]$Template = '',
+    [switch]$OpenSavePreset,
     [switch]$OpenHistory,
     [switch]$OpenFinalPreview,
     [switch]$OpenSettings,
@@ -58,6 +59,46 @@ try
         if (-not $templateElement) { throw 'TemplateBox automation element was not found.' }
         $valuePattern = $templateElement.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
         $valuePattern.SetValue($Template)
+    }
+    if ($OpenSavePreset)
+    {
+        Start-Sleep -Milliseconds 400
+        $windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($captureProcess.MainWindowHandle)
+        $saveCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+            'SavePresetButton')
+        $saveButton = $windowElement.FindFirst([System.Windows.Automation.TreeScope]::Subtree, $saveCondition)
+        if (-not $saveButton) { throw 'SavePresetButton automation element was not found.' }
+        $invokePattern = $saveButton.GetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern)
+        $invokePattern.Invoke()
+        Start-Sleep -Milliseconds 600
+        $processCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ProcessIdProperty,
+            $captureProcess.Id)
+        $windows = [System.Windows.Automation.AutomationElement]::RootElement.FindAll(
+            [System.Windows.Automation.TreeScope]::Descendants,
+            $processCondition)
+        for ($index = 0; $index -lt $windows.Count; $index++)
+        {
+            $candidate = $windows.Item($index)
+            if ($candidate.Current.ControlType -eq [System.Windows.Automation.ControlType]::Window -and
+                $candidate.Current.NativeWindowHandle -ne 0 -and
+                $candidate.Current.NativeWindowHandle -ne $captureProcess.MainWindowHandle)
+            {
+                $captureHandle = [IntPtr]$candidate.Current.NativeWindowHandle
+                break
+            }
+        }
+        if ($captureHandle -eq $captureProcess.MainWindowHandle) { throw 'Save preset window did not become visible.' }
+        $dialogElement = [System.Windows.Automation.AutomationElement]::FromHandle($captureHandle)
+        $nameBoxCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+            'PresetNameBox')
+        $nameBox = $dialogElement.FindFirst([System.Windows.Automation.TreeScope]::Subtree, $nameBoxCondition)
+        if (-not $nameBox) { throw 'PresetNameBox automation element was not found.' }
+        $nameBoxHeight = $nameBox.Current.BoundingRectangle.Height
+        if ($nameBoxHeight -lt 34) { throw "PresetNameBox is clipped: ${nameBoxHeight}px high." }
+        Write-Output "PresetNameBoxHeight=$nameBoxHeight"
     }
     if ($OpenHistory)
     {
