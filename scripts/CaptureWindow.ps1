@@ -5,6 +5,7 @@ param(
     [int]$Width = 0,
     [int]$Height = 0,
     [string]$Template = '',
+    [switch]$SelectFirstPreset,
     [switch]$OpenSavePreset,
     [switch]$OpenHistory,
     [switch]$OpenFinalPreview,
@@ -59,6 +60,40 @@ try
         if (-not $templateElement) { throw 'TemplateBox automation element was not found.' }
         $valuePattern = $templateElement.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
         $valuePattern.SetValue($Template)
+    }
+    if ($SelectFirstPreset)
+    {
+        Start-Sleep -Milliseconds 400
+        $windowElement = [System.Windows.Automation.AutomationElement]::FromHandle($captureProcess.MainWindowHandle)
+        $condition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::AutomationIdProperty,
+            'TemplateBox')
+        $templateElement = $windowElement.FindFirst([System.Windows.Automation.TreeScope]::Subtree, $condition)
+        if (-not $templateElement) { throw 'TemplateBox automation element was not found.' }
+        $expandPattern = $templateElement.GetCurrentPattern([System.Windows.Automation.ExpandCollapsePattern]::Pattern)
+        $expandPattern.Expand()
+        Start-Sleep -Milliseconds 400
+        $itemCondition = [System.Windows.Automation.PropertyCondition]::new(
+            [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+            [System.Windows.Automation.ControlType]::ListItem)
+        $presetItem = $null
+        for ($attempt = 0; $attempt -lt 10 -and -not $presetItem; $attempt++)
+        {
+            $presetItem = $templateElement.FindFirst([System.Windows.Automation.TreeScope]::Subtree, $itemCondition)
+            if (-not $presetItem) { Start-Sleep -Milliseconds 100 }
+        }
+        if (-not $presetItem) { throw 'No saved preset was found in TemplateBox.' }
+        $selectionPattern = $presetItem.GetCurrentPattern([System.Windows.Automation.SelectionItemPattern]::Pattern)
+        $selectionPattern.Select()
+        $expandPattern.Collapse()
+        Start-Sleep -Milliseconds 500
+        $valuePattern = $templateElement.GetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern)
+        $templateValue = $valuePattern.Current.Value
+        if ([string]::IsNullOrWhiteSpace($templateValue) -or $templateValue -like '*RenamePreset*')
+        {
+            throw "Saved preset display is invalid: $templateValue"
+        }
+        Write-Output "TemplateBoxValue=$templateValue"
     }
     if ($OpenSavePreset)
     {

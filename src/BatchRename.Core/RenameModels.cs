@@ -40,6 +40,9 @@ public sealed class RenamePreset
 {
     public string Name { get; set; } = string.Empty;
     public RenameOptions Options { get; set; } = new();
+
+    [JsonIgnore]
+    public string DisplayText => Options?.Template ?? string.Empty;
 }
 
 public sealed class RenamePlanItem

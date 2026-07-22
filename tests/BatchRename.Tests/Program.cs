@@ -1,5 +1,6 @@
 using BatchRename.Core;
 using BatchRename.App;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -11,6 +12,7 @@ var tests = new List<(string Name, Action Run)>
     ("补零序号", TestPaddedSequence),
     ("日期、大小、类型和倒序排序", TestSortModes),
     ("命名方案本地保存、覆盖和删除", TestPresetPersistence),
+    ("命名方案在可编辑下拉框显示模板文本", TestPresetDisplayText),
     ("文件与文件夹执行后可回退", TestExecuteAndUndo),
     ("重复目标冲突", TestDuplicateCollision),
     ("外部目标占用冲突", TestExistingTargetCollision),
@@ -130,6 +132,41 @@ static void TestPresetPersistence()
     Equal("覆盖_{N}{S}", store.Load().Single().Options.Template);
     store.Delete("漫画序号");
     Equal(0, store.Load().Count);
+}
+
+static void TestPresetDisplayText()
+{
+    using var fixture = new TempFixture();
+    var store = new PresetStore(Path.Combine(fixture.Root, "presets.json"));
+    store.Save("1-n", new RenameOptions { Template = "{1}{S}" });
+    var preset = store.Load().Single();
+
+    Equal("{1}{S}", preset.DisplayText);
+
+    Exception? failure = null;
+    var thread = new Thread(() =>
+    {
+        try
+        {
+            var comboBox = new System.Windows.Controls.ComboBox
+            {
+                IsEditable = true,
+                IsTextSearchEnabled = false
+            };
+            System.Windows.Controls.TextSearch.SetTextPath(comboBox, nameof(RenamePreset.DisplayText));
+            comboBox.Items.Add(preset);
+            comboBox.SelectedItem = preset;
+            Equal("{1}{S}", comboBox.Text);
+        }
+        catch (Exception ex)
+        {
+            failure = ex;
+        }
+    });
+    thread.SetApartmentState(ApartmentState.STA);
+    thread.Start();
+    thread.Join();
+    if (failure is not null) throw failure;
 }
 
 static void TestExecuteAndUndo()

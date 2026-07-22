@@ -53,7 +53,7 @@
                         <TextBlock Text="命名格式" Style="{StaticResource FieldLabel}"/>
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="8"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <ComboBox x:Name="TemplateBox" ItemsSource="{Binding Presets}" IsEditable="True" IsTextSearchEnabled="False" StaysOpenOnEdit="True"
+                            <ComboBox x:Name="TemplateBox" ItemsSource="{Binding Presets}" IsEditable="True" IsTextSearchEnabled="False" TextSearch.TextPath="DisplayText" StaysOpenOnEdit="True"
                                       Text="{}{P}{S}" FontFamily="Consolas" FontSize="15" MaxDropDownHeight="420" SelectionChanged="TemplateBox_SelectionChanged"
                                       Loaded="TemplateBox_Loaded"
                                       PreviewMouseWheel="ComboBox_PreviewMouseWheel" ToolTip="直接输入命名格式，或从下拉列表载入已保存方案"
