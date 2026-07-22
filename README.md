@@ -34,7 +34,7 @@
 ## 下载与安装
 
 1. 打开 [Releases](https://github.com/2786886095/langbai-batch-renamer/releases/latest)。
-2. 下载最新的 `BatchRename-Setup-1.1.4-x64.exe`。
+2. 下载最新的 `BatchRename-Setup-1.1.5-x64.exe`。
 3. 右键安装包并选择“以管理员身份运行”。
 4. 安装完成后，在资源管理器中选中文件或文件夹并右键选择“批量重命名”。
 

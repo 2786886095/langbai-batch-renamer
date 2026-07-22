@@ -5,9 +5,10 @@ if (-not (Test-Path "Cert:\LocalMachine\TrustedPeople\$($certificate.Thumbprint)
 {
     Import-Certificate -FilePath $CertificatePath -CertStoreLocation "Cert:\LocalMachine\TrustedPeople" | Out-Null
 }
-$existing = Get-AppxPackage -Name "LangBai.BatchRename"
-if ($existing) { $existing | Remove-AppxPackage }
-Add-AppxPackage -Path $PackagePath -ForceApplicationShutdown
+# Install newer packages as an in-place MSIX update. Removing the old package
+# first also removes its private LocalAppData, including saved presets, settings,
+# and rename history.
+Add-AppxPackage -Path $PackagePath -ForceApplicationShutdown -ForceUpdateFromAnyVersion
 
 # The packaged verbs cover the Windows 11 first-level menu for file-only and
 # folder-only selections. AllFilesystemObjects keeps mixed file/folder

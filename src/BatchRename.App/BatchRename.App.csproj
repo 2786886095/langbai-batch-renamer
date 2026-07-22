@@ -13,7 +13,7 @@
     <UseWPF>true</UseWPF>
     <AssemblyName>BatchRename</AssemblyName>
     <RootNamespace>BatchRename.App</RootNamespace>
-    <Version>1.1.4</Version>
+    <Version>1.1.5</Version>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon Condition="Exists('Assets\BatchRename.ico')">Assets\BatchRename.ico</ApplicationIcon>
   </PropertyGroup>

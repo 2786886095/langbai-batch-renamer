@@ -1,4 +1,4 @@
-param([string]$Version = "1.1.4")
+param([string]$Version = "1.1.5")
 
 $ErrorActionPreference = "Stop"
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw "Version must use major.minor.patch format, for example 1.1.0." }

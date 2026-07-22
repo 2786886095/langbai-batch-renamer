@@ -28,6 +28,7 @@ var tests = new List<(string Name, Action Run)>
     ,("总路径超过 260 字符仍可执行并回退", TestLongPathExecuteAndUndo)
     ,("设置可持久保存启动更新开关", TestSettingsPersistence)
     ,("更新检查、下载与 SHA-256 校验", TestUpdateCheckAndDownload)
+    ,("软件内更新使用原位升级并保留本地数据", TestInstallerUsesInPlaceUpdate)
 };
 if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("BATCH_RENAME_UNC_TEST_ROOT")))
     tests.Add(("UNC 网络共享执行并回退", TestUncExecuteAndUndo));
@@ -408,6 +409,26 @@ static void TestUpdateCheckAndDownload()
     var path = service.DownloadAsync(release, new Progress<double>()).GetAwaiter().GetResult();
     try { Equal("verified-installer", System.IO.File.ReadAllText(path)); }
     finally { System.IO.File.Delete(path); }
+}
+
+static void TestInstallerUsesInPlaceUpdate()
+{
+    var scriptPath = FindRepositoryFile("installer", "Install-Package.ps1");
+    var script = System.IO.File.ReadAllText(scriptPath);
+    True(script.Contains("Add-AppxPackage", StringComparison.Ordinal));
+    True(script.Contains("-ForceApplicationShutdown", StringComparison.Ordinal));
+    True(script.Contains("-ForceUpdateFromAnyVersion", StringComparison.Ordinal));
+    True(!script.Contains("Remove-AppxPackage", StringComparison.OrdinalIgnoreCase));
+}
+
+static string FindRepositoryFile(params string[] relativeParts)
+{
+    for (var directory = new DirectoryInfo(AppContext.BaseDirectory); directory is not null; directory = directory.Parent)
+    {
+        var candidate = Path.Combine([directory.FullName, .. relativeParts]);
+        if (System.IO.File.Exists(candidate)) return candidate;
+    }
+    throw new FileNotFoundException($"无法定位仓库文件：{Path.Combine(relativeParts)}");
 }
 
 static void True(bool condition)
